@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import analysis  
+from mlxtend.frequent_patterns import apriori, association_rules
 from collections import Counter
 import matplotlib.pyplot as plt
 
@@ -199,7 +200,7 @@ with tab[1]:
 
 
         # Botão para adicionar regra
-        if st.button("Adicionar Regra"):
+        if st.button("Adicionar meta regra"):
             if antecedente and consequente:
                 # Adiciona como dicionário
                 regra = {"antecedente": antecedente, "consequente": consequente}
@@ -210,7 +211,7 @@ with tab[1]:
                 st.session_state.consequente_habilitado = False
 
         # Botão para adicionar nova regra (habilita selects novamente)
-        if st.button("➕ Adicionar outra regra"):   
+        if st.button("➕ Compor nova meta regra"):   
             st.session_state.antecedente_habilitado = True
             st.session_state.consequente_habilitado = True
             # Resetando selects sem sobrescrever a chave
@@ -222,7 +223,7 @@ with tab[1]:
 
         # Mostrar regras já adicionadas com opção de remover
         if st.session_state.regras:
-            st.subheader("Regras selecionadas:")
+            st.subheader("Meta regras selecionadas:")
             
             for i, regra in enumerate(st.session_state.regras):
                 texto = f"{regra['antecedente']} → {regra['consequente']}"
@@ -242,7 +243,7 @@ with tab[1]:
         st.session_state.regras = novas_regras
         
         # Botão para gerar regras filtradas
-        if st.button("Gerar regras filtradas"):
+        if st.button("Gerar regras"):
             df_regras = analysis.gerar_regras_com_mlxtend(
                 st.session_state.dados_processados,
                 sup=st.session_state.min_support,
@@ -250,24 +251,37 @@ with tab[1]:
             )
             st.session_state.df_regras = df_regras
 
-            # Normalizar as colunas (opcional, mas recomendado)
-            # Se já tiver função normalizar_regra em analysis, use ela; caso contrário, mantenha sem normalizar
-            try:
-                df_regras["antecedente"] = df_regras["antecedente"].apply(lambda s: analysis.normalizar_regra(s, df_part=None))
-                df_regras["consequente"] = df_regras["consequente"].apply(lambda s: analysis.normalizar_regra(s, df_part=None))
-            except Exception:
-                # se analysis.normalizar_regra não existir ou der erro, ignoramos (a função filtrar é tolerante)
-                pass
-
-            st.session_state.df_regras = df_regras
             df_filtrado = analysis.filtrar_regras_por_atributo(df_regras, st.session_state.regras)
             st.session_state.df_filtrado = df_filtrado
+            
+            df_oht = analysis.preparar_para_apriori(st.session_state.dados_processados)
+            frequent_itemsets = apriori(df_oht, min_support=st.session_state.min_support, use_colnames=True)
+            st.write(frequent_itemsets.sort_values('support', ascending=False))
+            
+            st.write(float(st.session_state.min_confidence))
             # Mostrar as regras na tela
             # --- Análise Geral por regra escolhida (sem médias; valores exatos) ---
             if df_filtrado.empty:
                 st.warning("Nenhuma regra encontrada com os filtros selecionados.")
             else:
                 st.subheader("Análise Geral das Regras")
+                
+                #st.write("Regras selecionadas pelo usuário:", st.session_state.regras)
+
+                st.subheader("Todas as regras geradas")
+                st.dataframe(st.session_state.df_regras)
+                
+                df_teste = st.session_state.df_regras[
+                    st.session_state.df_regras["consequente"].str.contains("merged=False", na=False)
+                ]
+
+                st.subheader("Regras teste")
+                st.dataframe(df_teste)
+                
+                df_test = st.session_state.dados_processados
+                contagem = df_test.groupby(['firstpull', 'merged']).size().reset_index(name='qtd')
+                st.write("Contagem de PRs por firstpull e merged:")
+                st.dataframe(contagem)
 
                 # Normaliza nomes, se vierem com maiúsculas
                 df_plot = df_filtrado.rename(columns={
@@ -278,94 +292,56 @@ with tab[1]:
                     "Consequente": "consequente",
                 })
 
-                
                 # Para cada regra definida pelo usuário, gere seus gráficos isoladamente
                 for regra_user in st.session_state.regras:
-                    ant_attr = regra_user["antecedente"]
-                    cons_attr = regra_user["consequente"]
+                    atributo_antecedente = regra_user["antecedente"]
+                    atributo_consequente = regra_user["consequente"]
 
-                    # Mantém só regras 1x1 que correspondem exatamente ao par (ant_attr, cons_attr)
-                    mask = (
-                        df_plot["antecedente"].apply(lambda s: analysis.parse_um_item(s)[0] == ant_attr) &
-                        df_plot["consequente"].apply(lambda s: analysis.parse_um_item(s)[0] == cons_attr)
-                    )
-                    base_regra = df_plot[mask].copy()
+                    # Seleciona apenas regras simples no antecedente (sem vírgula)
+                    mask_ant = st.session_state.df_regras["antecedente"].str.match(f"^{atributo_antecedente}=.+$") & \
+                            (~st.session_state.df_regras["antecedente"].str.contains(","))
 
+                    # Seleciona apenas regras simples no consequente
+                    mask_cons = st.session_state.df_regras["consequente"].str.match(f"^{atributo_consequente}=.+$") & \
+                            (~st.session_state.df_regras["consequente"].str.contains(","))
+
+                    base_regra = st.session_state.df_regras[mask_ant & mask_cons].copy()
+                    st.write("Regras filtradas:", base_regra)             
                     if base_regra.empty:
-                        st.info(f"Nenhuma regra 1x1 encontrada para **{ant_attr} → {cons_attr}**.")
+                        st.warning(f"Nenhuma regra encontrada para {atributo_antecedente} → {atributo_consequente}")
                         continue
 
-                    st.markdown(f"### {ant_attr} → {cons_attr}")
+                    st.subheader(f"Regra: {atributo_antecedente} → {atributo_consequente}")
+                    
+                    # 3 gráficos lado a lado: Suporte, Confiança, Lift
+                    cols = st.columns(3)
+                    for i, medida in enumerate(["suporte", "confianca", "lift"]):
+                        with cols[i]:
+                            fig, ax = plt.subplots(figsize=(2.2, 1.6))
+                            bars = ax.bar(base_regra["antecedente"].astype(str) + " → " + base_regra["consequente"].astype(str),
+                                        base_regra[medida])
 
-                    # Para cada valor do CONSEQUENTE, monte uma linha com 3 gráficos (sup/conf/lift)
-                    cons_vals = sorted({
-                        analysis.parse_um_item(x)[1] for x in base_regra["consequente"]
-                        if analysis.parse_um_item(x)[1] is not None
-                    })
+                            # estética compacta
+                            ymax = float(base_regra[medida].max())
+                            ax.set_ylim(0, ymax * 1.15 if ymax > 0 else 1)
+                            ax.tick_params(axis="x", labelsize=6, rotation=45)
+                            ax.tick_params(axis="y", labelsize=6)
+                            ax.set_title(medida.capitalize(), fontsize=8, pad=2)
 
-                    for cons_val in cons_vals:
-                        # Filtra pelo valor específico do consequente
-                        sub = base_regra[
-                            base_regra["consequente"].apply(lambda s: analysis.parse_um_item(s)[1] == cons_val)
-                        ].copy()
+                            # valores em cima das barras
+                            for b in bars:
+                                h = b.get_height()
+                                ax.text(b.get_x() + b.get_width()/2, h, f"{h:.2f}",
+                                        ha="center", va="bottom", fontsize=6)
 
-                        # Extrai o valor do antecedente e agrega por segurança (se houver duplicados)
-                        #sub["ant_val"] = sub["antecedente"].apply(lambda s: parse_um_item(s)[1])
-                        #sub = (sub.groupby("ant_val", as_index=False)[["suporte", "confianca", "lift"]]
-                        #        .max())  # ou .first() se preferir
+                            plt.tight_layout(pad=0.3)
+                            st.pyplot(fig, use_container_width=False)
 
-
-
-                        # 🔹 NOVO: garante que todos os valores possíveis do antecedente apareçam,
-                        # mesmo que não tenham regra
-                        # Pega todos os valores possíveis do antecedente diretamente do DataFrame original do upload
-                        todos_ant_vals = sorted(
-                            st.session_state.dados_processados[ant_attr].dropna().unique().astype(str)
-                        )
-
-                        # Cria a coluna 'ant_val' a partir do parse
-                        sub["ant_val"] = sub["antecedente"].apply(lambda s: analysis.parse_um_item(s)[1])
-
-                        # Reindexa para garantir que todos os valores possíveis apareçam
-                        sub = sub.set_index("ant_val").reindex(todos_ant_vals, fill_value=0).reset_index()
-
-
-
-                        # Cabeçalho da linha
-                        st.markdown(
-                            f"<div style='text-align:center; font-weight:600; margin:6px 0 2px;'>"
-                            f"{ant_attr} → {cons_attr} = <code>{cons_val}</code></div>",
-                            unsafe_allow_html=True
-                        )
-
-                        # 3 gráficos lado a lado: Suporte, Confiança, Lift
-                        cols = st.columns(3)
-                        for i, medida in enumerate(["suporte", "confianca", "lift"]):
-                            with cols[i]:
-                                fig, ax = plt.subplots(figsize=(2.2, 1.6))
-                                bars = ax.bar(sub["ant_val"].astype(str), sub[medida])
-
-                                # estética compacta
-                                ymax = float(sub[medida].max()) if not sub.empty else 0.0
-                                ax.set_ylim(0, ymax * 1.15 if ymax > 0 else 1)
-                                ax.tick_params(axis="x", labelsize=6, rotation=45)
-                                ax.tick_params(axis="y", labelsize=6)
-                                ax.set_title(medida.capitalize(), fontsize=8, pad=2)
-
-                                # valores em cima das barras
-                                for b in bars:
-                                    h = b.get_height()
-                                    ax.text(b.get_x() + b.get_width()/2, h, f"{h:.2f}",
-                                            ha="center", va="bottom", fontsize=6)
-
-                                plt.tight_layout(pad=0.3)
-                                st.pyplot(fig, use_container_width=False)
-
-                        # separador fino entre linhas (cada valor do consequente)
-                        st.markdown(
-                            "<div style='height:1px; background:#e6e6e6; margin:6px 0;'></div>",
-                            unsafe_allow_html=True
-                        )          
+                    # separador fino entre linhas (cada valor do consequente)
+                    st.markdown(
+                        "<div style='height:1px; background:#e6e6e6; margin:6px 0;'></div>",
+                        unsafe_allow_html=True
+                    )          
     
 
 # ---------- Aba 3: Particionamento da base de dados ----------
