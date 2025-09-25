@@ -60,62 +60,8 @@ def gerar_regras_com_mlxtend(df, sup, conf):
         return pd.DataFrame()
 
     df_regras = regras[['antecedents', 'consequents', 'support', 'confidence', 'lift']].copy()
-    df_regras['antecedente'] = df_regras['antecedents'].apply(
-        lambda x: ','.join([reconstruir_attr_valor(i) for i in x])
-    )
-    df_regras['consequente'] = df_regras['consequents'].apply(
-        lambda x: ','.join([reconstruir_attr_valor(i) for i in x])
-    )
-    df_regras.rename(columns={'support': 'suporte', 'confidence': 'confianca'}, inplace=True)
-
-    # seleciona e retorna
-    cols = ['antecedente', 'consequente', 'suporte', 'confianca', 'lift']
-    return df_regras[cols]
-
-def gerar_regras_com_mlxtend2(df, sup, conf):
-    """Gera regras e retorna DataFrame formatado com métricas traduzidas."""
-    # helper para reconstruir um item qualquer em "atributo=valor"
-    def _item_para_atributo_valor(item, original_cols):
-        s = str(item)
-        # já está no formato "attr=val"
-        if "=" in s:
-            return s.strip()
-        # se veio como "attr_val"
-        if "_" in s:
-            attr, val = s.split("_", 1)
-            return f"{attr}={val}"
-        # se o nome bate com uma coluna original (possível binarização de True)
-        if s in original_cols:
-            return f"{s}=True"
-        # fallback: retornar "item=True" (pode ajustar se preferir outro comportamento)
-        return f"{s}=True"
-
-    df_oht = preparar_para_apriori(df)
-    if df_oht.shape[1] == 0:
-        return pd.DataFrame()  # nada para minerar
-
-    # Apriori e association rules
-    frequent_itemsets = apriori(df_oht, min_support=float(sup), use_colnames=True)
-    if frequent_itemsets.empty:
-        return pd.DataFrame()
-
-    regras = association_rules(frequent_itemsets, metric="confidence", min_threshold=float(conf))
-    if regras.empty:
-        return pd.DataFrame()
-
-    df_regras = regras[['antecedents', 'consequents', 'support', 'confidence', 'lift']].copy()
-
-    # lista de colunas originais (para decidir quando assumir "=True")
-    original_cols = df.columns.tolist()
-
-    # normaliza antecedente e consequente para "atributo=valor"
-    df_regras['antecedente'] = df_regras['antecedents'].apply(
-        lambda x: ','.join([_item_para_atributo_valor(i, original_cols) for i in sorted(list(x))])
-    )
-    df_regras['consequente'] = df_regras['consequents'].apply(
-        lambda x: ','.join([_item_para_atributo_valor(i, original_cols) for i in sorted(list(x))])
-    )
-
+    df_regras['antecedente'] = df_regras['antecedents'].apply(lambda x: ','.join(list(x)))
+    df_regras['consequente'] = df_regras['consequents'].apply(lambda x: ','.join(list(x)))
     df_regras.rename(columns={'support': 'suporte', 'confidence': 'confianca'}, inplace=True)
 
     # seleciona e retorna
@@ -207,7 +153,10 @@ def filtrar_regras_por_atributo(df_regras, regras_usuario):
     Filtra regras do DataFrame de acordo com as regras completas selecionadas pelo usuário.
     Cada regra do usuário é do tipo: {'antecedente': 'atributo', 'consequente': 'atributo'}.
 
-    - Seleciona apenas regras simples (sem vírgula) no antecedente e consequente.
+    - df_regras: DataFrame com colunas ['antecedente', 'consequente', 'suporte', 'confianca', 'lift']
+    - regras_usuario: lista de dicts, cada dict com 'antecedente' e 'consequente' (somente atributos)
+
+    Retorna: DataFrame filtrado contendo todas as regras correspondentes.
     """
     import pandas as pd
 
@@ -219,10 +168,11 @@ def filtrar_regras_por_atributo(df_regras, regras_usuario):
         atr_ant = regra["antecedente"]
         atr_cons = regra["consequente"]
 
-        # filtra apenas regras simples com o atributo escolhido
+        # Seleciona todas as regras cujo antecedente contenha qualquer rótulo do atributo escolhido
+        # e consequente contenha qualquer rótulo do atributo escolhido
         filtro = df_regras[
-            df_regras['antecedente'].str.match(f"^{atr_ant}=.+$") & (~df_regras['antecedente'].str.contains(",")) &
-            df_regras['consequente'].str.match(f"^{atr_cons}=.+$") & (~df_regras['consequente'].str.contains(","))
+            df_regras['antecedente'].str.startswith(f"{atr_ant}=") &
+            df_regras['consequente'].str.startswith(f"{atr_cons}=")
         ]
         filtros.append(filtro)
 

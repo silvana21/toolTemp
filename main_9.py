@@ -57,7 +57,7 @@ with tab[0]:
             st.info("Nenhum atributo de data/numérico foi removido.")
         
         #Resumo dos atributos
-        st.subheader("Resumo dos Atributos (valores únicos e frequência)")
+        st.subheader("Resumo dos Atributos (valores e frequência)")
         
         cols = st.columns(3)  # cria 3 colunas
         col_index = 0  # controla em qual coluna inserir
@@ -490,109 +490,85 @@ with tab[3]:
                         break
 
                 # === Análise Temporal das Regras ===
-                st.subheader("Análise Temporal das Meta Regras")
+                st.subheader("Análise Temporal das Regras")
 
-                # Para cada meta-regra selecionada pelo usuário
+                # Para cada regra selecionada pelo usuário
                 for regra_user in st.session_state.regras:
                     ant_attr = regra_user["antecedente"]
                     cons_attr = regra_user["consequente"]
 
-                    # Filtra base geral para regras que correspondem à meta-regra (antecedente)
-                    base_geral_filtrada = st.session_state.base_regra[
-                        st.session_state.base_regra["antecedente"].str.match(f"^{ant_attr}=.+$")
-                    ]
+                    # cria uma lista para armazenar os dados da regra em cada partição
+                    medidas_particoes = []
 
-                    if base_geral_filtrada.empty:
-                        st.warning(f"Nenhuma regra encontrada na base geral para {ant_attr} → {cons_attr}")
-                        continue
+                    # percorre todas as partições
+                    for i, part in enumerate(st.session_state.particoes_temporais):
+                        df_part = part["dados"].copy()
+                        if df_part.empty:
+                            medidas_particoes.append({"suporte":0, "confianca":0, "lift":0})
+                            continue
+                        if "data" in df_part.columns:  # remove coluna de data
+                            df_part = df_part.drop(columns=["data"])
 
-                    # Itera sobre cada valor distinto do antecedente
-                    for ant_val, grupo_ant in base_geral_filtrada.groupby("antecedente"):
+                        # prepara os dados para mineração
+                        df_part_tratado, _, _ = analysis.preparar_dados_para_mineracao_from_df(df_part)
+                        
+                        # gera regras na partição
+                        df_regras_part = analysis.gerar_regras_com_mlxtend2(
+                            df_part_tratado,
+                            st.session_state.min_support,
+                            st.session_state.min_confidence
+                        )
 
-                        # Para cada valor distinto do consequente dentro do antecedente
-                        for cons_val, grupo_cons_geral in grupo_ant.groupby("consequente"):
+                        if df_regras_part.empty:
+                            medidas_particoes.append({"suporte":0, "confianca":0, "lift":0})
+                            continue
 
-                            st.markdown(
-                                f"<h5 style='text-align:center; color:#222; margin-top:10px; margin-bottom:4px;'>"
-                                f"{ant_val} → {cons_val}</h5>",
-                                unsafe_allow_html=True
-                            )
+                        # reconstruir atributo=valor
+                        def reconstruir_col(col):
+                            return [analysis.reconstruir_attr_valor(i) for i in col]
 
-                            # Lista para armazenar medidas de cada partição
-                            medidas_particoes = []
+                        df_regras_part["antecedente"] = df_regras_part["antecedente"].apply(lambda x: ','.join(reconstruir_col(x)))
+                        df_regras_part["consequente"] = df_regras_part["consequente"].apply(lambda x: ','.join(reconstruir_col(x)))
 
-                            # Percorre todas as partições temporais
-                            for i, part in enumerate(st.session_state.particoes_temporais):
-                                df_part = part["dados"].copy()
-                                if df_part.empty:
-                                    medidas_particoes.append({"suporte":0, "confianca":0, "lift":0})
-                                    continue
+                        # filtra regra simples correspondente ao usuário
+                        mask_ant = df_regras_part["antecedente"].str.match(f"^{ant_attr}=.+$") & (~df_regras_part["antecedente"].str.contains(","))
+                        mask_cons = df_regras_part["consequente"].str.match(f"^{cons_attr}=.+$") & (~df_regras_part["consequente"].str.contains(","))
 
-                                if "data" in df_part.columns:  # remove coluna de data
-                                    df_part = df_part.drop(columns=["data"])
+                        df_filtrado_part = df_regras_part[mask_ant & mask_cons]
 
-                                # Prepara os dados para mineração
-                                df_part_tratado, _, _ = analysis.preparar_dados_para_mineracao_from_df(df_part)
+                        if df_filtrado_part.empty:
+                            medidas_particoes.append({"suporte":0, "confianca":0, "lift":0})
+                        else:
+                            row = df_filtrado_part.iloc[0]  # deve ser único
+                            medidas_particoes.append({
+                                "suporte": row["suporte"],
+                                "confianca": row["confianca"],
+                                "lift": row["lift"]
+                            })
 
-                                # Gera regras na partição
-                                df_regras_part = analysis.gerar_regras_com_mlxtend2(
-                                    df_part_tratado,
-                                    st.session_state.min_support,
-                                    st.session_state.min_confidence
-                                )
+                    # cria DataFrame com medidas de todas as partições
+                    df_medidas = pd.DataFrame(medidas_particoes)
+                    df_medidas.index = [f"Partição {i+1}" for i in range(len(medidas_particoes))]
 
-                                if df_regras_part.empty:
-                                    medidas_particoes.append({"suporte":0, "confianca":0, "lift":0})
-                                    continue
+                    # título centralizado da regra
+                    st.markdown(
+                        f"<h5 style='text-align:center; color:#222; margin-top:10px;'>"
+                        f"{ant_attr} → {cons_attr}</h5>",
+                        unsafe_allow_html=True
+                    )
 
-                                df_filtrado_part = df_regras_part[
-                                    (df_regras_part["antecedente"] == ant_val) &
-                                    (df_regras_part["consequente"] == cons_val)
-                                ]
-
-                                if df_filtrado_part.empty:
-                                    medidas_particoes.append({"suporte":0, "confianca":0, "lift":0})
-                                else:
-                                    row = df_filtrado_part.iloc[0]  # assume única correspondência
-                                    medidas_particoes.append({
-                                        "suporte": row["suporte"],
-                                        "confianca": row["confianca"],
-                                        "lift": row["lift"]
-                                    })
-
-                            # Cria DataFrame com medidas de todas as partições
-                            df_medidas = pd.DataFrame(medidas_particoes)
-                            df_medidas.index = [f"Partição {i+1}" for i in range(len(medidas_particoes))]
-
-                            # Valores gerais da base geral (linha vermelha)
-                            linha_geral = grupo_cons_geral.iloc[0]  # pega a regra completa
-                            valores_gerais = {
-                                "suporte": linha_geral["suporte"],
-                                "confianca": linha_geral["confianca"],
-                                "lift": linha_geral["lift"]
-                            }
-
-                            # 3 gráficos lado a lado: suporte, confiança, lift
-                            cols = st.columns(3)
-                            for j, medida in enumerate(["suporte", "confianca", "lift"]):
-                                with cols[j]:
-                                    fig, ax = plt.subplots(figsize=(4, 3))
-                                    ax.bar(df_medidas.index, df_medidas[medida])
-                                    ax.set_title(medida.capitalize(), fontsize=10, pad=2)
-                                    ax.set_ylim(0, max(1, df_medidas[medida].max() * 1.15))
-                                    ax.tick_params(axis="x", rotation=45, labelsize=8)
-                                    ax.tick_params(axis="y", labelsize=8)
-
-                                    # linha de referência da análise geral
-                                    y_ref = valores_gerais[medida]
-                                    ax.axhline(y=y_ref, color="red", linestyle="--")
-                                    ax.text(len(df_medidas.index)-0.3, y_ref, f"{y_ref:.2f}", color="red",
-                                            fontsize=8, va="bottom", ha="left")
-
-                                    # valores em cima das barras
-                                    for k, h in enumerate(df_medidas[medida]):
-                                        ax.text(k, h, f"{h:.2f}", ha="center", va="bottom", fontsize=7)
-
-                                    plt.tight_layout()
-                                    st.pyplot(fig, use_container_width=False)
-
+                    # 3 gráficos lado a lado: suporte, confiança, lift
+                    cols = st.columns(3)
+                    for j, medida in enumerate(["suporte", "confianca", "lift"]):
+                        with cols[j]:
+                            fig, ax = plt.subplots(figsize=(4, 3))
+                            ax.bar(df_medidas.index, df_medidas[medida])
+                            ax.set_title(medida.capitalize(), fontsize=10, pad=2)
+                            ax.set_ylim(0, max(1, df_medidas[medida].max() * 1.15))
+                            ax.tick_params(axis="x", rotation=45, labelsize=8)
+                            ax.tick_params(axis="y", labelsize=8)
+                            # valores em cima das barras
+                            for k, h in enumerate(df_medidas[medida]):
+                                ax.text(k, h, f"{h:.2f}", ha="center", va="bottom", fontsize=7)
+                            plt.tight_layout()
+                            st.pyplot(fig, use_container_width=False)
