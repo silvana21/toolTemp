@@ -607,3 +607,96 @@ def listar_valores_por_atributo(df, top=20):
             valores = valores[:top] + ["..."]
         resultados[col] = valores
     return resultados
+
+def calcular_meses(data_inicio, data_fim):
+    """Calcula o número de meses entre duas datas, incluindo o mês inicial."""
+    return (data_fim.year - data_inicio.year) * 12 + (data_fim.month - data_inicio.month)
+
+def particionar_por_meses(df, col_data, meses_por_particao):
+    """
+    Divide o DataFrame em partições consecutivas de X meses.
+    Retorna uma lista de dicionários com cada partição e suas informações:
+    'df', 'data_min', 'data_max', 'meses'.
+    """
+    particoes = []
+    #df = df.sort_values(col_data)
+    data_inicio = df[col_data].min()
+    data_fim = df[col_data].max()
+
+    while data_inicio <= data_fim:
+        # Não subtraímos 1 dia aqui para evitar erro de arredondamento
+        data_final_part = data_inicio + pd.DateOffset(months=meses_por_particao)
+        df_part = df[(df[col_data] >= data_inicio) & (df[col_data] < data_final_part)]
+        
+        if not df_part.empty:
+            particoes.append({
+                "data_min": df_part[col_data].min(),
+                "data_max": df_part[col_data].max(),
+                "dados": df_part,
+                #"meses": calcular_meses(df_part[col_data].min(), df_part[col_data].max())
+            })
+        
+        data_inicio = data_final_part
+
+    return particoes
+
+def particionar_por_marcos(df, col_data, marcos):
+    """
+    Divide o DataFrame com base em marcos temporais definidos pelo usuário.
+    'marcos' deve ser uma lista de datas (datetime).
+    Retorna uma lista de dicionários com cada partição e suas informações.
+    """
+    df = df.sort_values(col_data)
+    particoes = []
+    data_inicio = df[col_data].min()
+
+    # Garantir que os marcos estejam ordenados
+    marcos = sorted(marcos)
+
+    for marco in marcos:
+        df_part = df[(df[col_data] >= data_inicio) & (df[col_data] < marco)]
+        if not df_part.empty:
+            particoes.append({
+                "df": df_part,
+                "data_min": df_part[col_data].min(),
+                "data_max": df_part[col_data].max()
+            })
+        data_inicio = marco
+
+    # Última partição (após o último marco)
+    df_part_final = df[(df[col_data] >= data_inicio)]
+    if not df_part_final.empty:
+        particoes.append({
+            "df": df_part_final,
+            "data_min": df_part_final[col_data].min(),
+            "data_max": df_part_final[col_data].max()
+        })
+
+    return particoes
+
+def particionar_por_registros(df, tamanho_particao, col_data):
+    """
+    Divide o DataFrame em partições de tamanho fixo (número de registros).
+    Retorna uma lista de dicionários com cada partição e suas informações.
+    
+    Parâmetros:
+    - df: DataFrame original
+    - tamanho_particao: número de registros por partição
+    - col_data: nome da coluna de data (usada para calcular data_min e data_max)
+    """
+    df = df.sort_values(col_data).reset_index(drop=True)
+    particoes = []
+
+    total_registros = len(df)
+    num_particoes = (total_registros // tamanho_particao) + (1 if total_registros % tamanho_particao else 0)
+
+    for i in range(0, total_registros, tamanho_particao):
+        df_part = df.iloc[i:i + tamanho_particao]
+        if not df_part.empty:
+            particoes.append({
+                "data_min": df_part[col_data].min(),
+                "data_max": df_part[col_data].max(),
+                "dados": df_part,
+            })
+
+    return particoes
