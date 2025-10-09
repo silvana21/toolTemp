@@ -700,3 +700,4 @@ def particionar_por_registros(df, tamanho_particao, col_data):
             })
 
     return particoes
+

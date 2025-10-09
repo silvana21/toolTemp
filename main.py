@@ -6,6 +6,7 @@ from mlxtend.frequent_patterns import apriori, association_rules
 from collections import Counter
 import matplotlib.pyplot as plt
 import streamlit.components.v1 as components
+import re
 
 st.set_page_config(page_title="Ferramenta de Análise Temporal", layout="wide")
 
@@ -54,6 +55,63 @@ def _init_state():
             st.session_state[k] = v
 
 _init_state()
+
+def _sanitize_input(key, min_value=None, max_value=None, decimals=1):
+    """Callback: limpa st.session_state[key] mantendo só números e 1 ponto decimal."""
+    s = st.session_state.get(key, "")
+    s = s.strip().replace(",", ".")
+    # remove tudo que não seja dígito ou ponto
+    s = re.sub(r"[^0-9.]", "", s)
+    # mantém apenas o primeiro ponto
+    if s.count(".") > 1:
+        parts = s.split(".")
+        s = parts[0] + "." + "".join(parts[1:])
+    # caso vazio ou apenas ponto, deixa vazio (campo ficará vazio)
+    if s in ("", "."):
+        st.session_state[key] = ""
+        return
+    try:
+        num = float(s)
+    except ValueError:
+        st.session_state[key] = ""
+        return
+    # limites
+    if (min_value is not None) and (num < min_value):
+        num = min_value
+    if (max_value is not None) and (num > max_value):
+        num = max_value
+    # formata com casas decimais desejadas
+    fmt = f"{{:.{decimals}f}}".format(num)
+    st.session_state[key] = fmt
+
+def numeric_text_input(label, key, value=0.0, min_value=None, max_value=None, decimals=1, width=90):
+    """
+    Text input que aceita apenas números (limpa via on_change).
+    Retorna float (valor default se campo vazio ou inválido).
+    - key: chave única no session_state
+    - value: valor inicial (float)
+    - min_value/max_value: limites opcionais
+    - decimals: casas decimais exibidas
+    """
+    # inicializa state se necessário
+    if key not in st.session_state:
+        st.session_state[key] = f"{value:.{decimals}f}"
+
+    # cria o text_input que dispara _sanitize_input ao alterar (quando o widget perde foco / Enter)
+    st.text_input(
+        label,
+        value=st.session_state[key],
+        key=key,
+        on_change=_sanitize_input,
+        args=(key, min_value, max_value, decimals)
+    )
+
+    # retorna float limpo (ou valor padrão)
+    s = st.session_state.get(key, "")
+    try:
+        return float(s) if s != "" else float(value)
+    except Exception:
+        return float(value)
 
 # ----------------- Abas -----------------
 abas = ["Upload e Resumo", "Regras Gerais", "Divisão Temporal dos Dados", "Análise Temporal"]
@@ -118,8 +176,6 @@ with tab[0]:
                 )
                 st.pyplot(fig, use_container_width=False)
                 
-                
-            
             # avança para a próxima coluna
             col_index += 1
 
@@ -141,9 +197,7 @@ with tab[1]:
     
     # Garantir que os dados foram carregados e processados
     if "dados_processados" in st.session_state and st.session_state.dados_processados is not None:
-        
-        st.subheader("Configuração do algoritmo Apriori")
-        
+
         # Cria 3 colunas: esquerda, central e direita
         col_esq, col_central, col_dir = st.columns([2, 1, 1])
 
@@ -151,19 +205,25 @@ with tab[1]:
             # Inputs lado a lado dentro da coluna central
             col_s, col_c = st.columns([1,1])
         with col_s:
-            min_support = st.number_input(
-                "Suporte mínimo (%)", 
-                min_value=0.0, 
-                max_value=100.0,
-                value=st.session_state.min_support * 100
-            ) / 100.0
+            min_support_pct = numeric_text_input(
+                "Suporte mínimo (%)",
+                key="min_support_input",
+                value=st.session_state.min_support * 100,
+                min_value=0.0,
+                max_value=100.0#,
+                #decimals=1
+            )
+            min_support = min_support_pct / 100.0
         with col_c:
-            min_confidence = st.number_input(
-                "Confiança mínima (%)", 
-                min_value=0.0, 
-                max_value=100.0,
-                value=st.session_state.min_confidence * 100
-            ) / 100.0
+            min_confidence_pct = numeric_text_input(
+                "Confiança mínima (%)",
+                key="min_confidence_input",
+                value=st.session_state.min_confidence * 100,
+                min_value=0.0,
+                max_value=100.0#,
+                #decimals=1
+            )
+            min_confidence = min_confidence_pct / 100.0
         st.session_state.min_support = min_support
         st.session_state.min_confidence = min_confidence
         colunas = list(st.session_state.dados_processados.columns)
@@ -539,21 +599,19 @@ with tab[2]:
             elif tipo_particionamento == "Por quantidade de registros":
             
                 #st.subheader("Particionamento por quantidade de registros")
-                # Input do usuário: quantos meses por partição
-                st.markdown("""
-                    <style>
-                    /* Altera apenas o campo number_input */
-                    div[data-testid="stNumberInput"] {
-                        width: 130px !important; /* ajuste o valor conforme quiser */
-                    }
-                    </style>
-                    """, unsafe_allow_html=True)
-                tamanho_particao = st.number_input(
-                    "Quantidade de registros por partição:",
+                st.markdown("**Particionamento por quantidade de registros**")
+
+                tamanho_particao = numeric_text_input(
+                    label="Quantidade de registros por partição:",
+                    key="tamanho_particao_input",
+                    value=min(100, len(df_original)),
                     min_value=10,
                     max_value=len(df_original),
-                    value=min(100, len(df_original))  # valor padrão de exemplo
+                    decimals=0,
+                    width=30
                 )
+
+                tamanho_particao = int(tamanho_particao)
 
                 # Botão para gerar as partições
                 if st.button("Gerar partições"):
