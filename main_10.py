@@ -5,13 +5,35 @@ import analysis
 from mlxtend.frequent_patterns import apriori, association_rules
 from collections import Counter
 import matplotlib.pyplot as plt
-from streamlit_option_menu import option_menu
+import streamlit.components.v1 as components
 import re
-from dateutil.relativedelta import relativedelta
 
-st.set_page_config(page_title="Análise Temporal de Regras de Associação", layout="wide")
+st.set_page_config(page_title="Ferramenta de Análise Temporal", layout="wide")
 
-#st.title("Análise Temporal de Regras de Associação")
+# --- CSS para fixar as abas no topo ---
+st.markdown("""
+<style>
+/* Fixar as abas do st.tabs no topo */
+section[data-testid="stTabs"] > div[role="tablist"] {
+    position: sticky !important;
+    top: 4rem !important;   /* Ajuste conforme altura do header */
+    z-index: 9999 !important;
+    background-color: white !important;
+    padding-top: 0.4rem !important;
+    padding-bottom: 0.4rem !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08) !important;
+}
+
+/* Permitir que o sticky funcione mesmo dentro de containers */
+main, .stApp, .block-container, div[data-testid="stVerticalBlock"] {
+    overflow: visible !important;
+    transform: none !important;
+}
+</style>
+""", unsafe_allow_html=True)
+# --- FIM DO CSS ---
+
+st.title("Análise Temporal de Regras de Associação")
 
 # ---------- Session state ----------
 def _init_state():
@@ -92,37 +114,12 @@ def numeric_text_input(label, key, value=0.0, min_value=None, max_value=None, de
         return float(value)
 
 # ----------------- Abas -----------------
-# --- MENU LATERAL ---
-with st.sidebar:
-    st.markdown("### 🧭 Navegação")
-
-    tab = option_menu(
-        None,
-        ["Carregar CSV", "Regras Gerais", "Partições", "Análise Temporal"],
-        icons=["file-earmark-arrow-up", "diagram-3", "calendar3", "bar-chart"],
-        menu_icon="cast",
-        default_index=0,
-        styles={
-            "container": {"padding": "0!important",
-            "background-color": "transparent"},
-            "icon": {"color": "#4a4a4a", "font-size": "18px"},
-            "nav-link": {
-                "font-size": "15px",
-                "text-align": "left",
-                "margin": "2px 0",
-                "--hover-color": "#f0f2f6",
-            },
-            "nav-link-selected": {
-                "background-color": "#0366d6",
-                "color": "white",
-                "font-weight": "bold",
-            },
-        },
-    )
+abas = ["Upload e Resumo", "Regras Gerais", "Divisão Temporal dos Dados", "Análise Temporal"]
+tab = st.tabs(abas)
 
 # ---------- Aba 1: Upload e Resumo ----------
-if tab == "Carregar CSV":
-    st.subheader("Carregar CSV")
+with tab[0]:
+    st.subheader("Upload do CSV")
     uploaded_file = st.file_uploader("Escolha um arquivo CSV", type="csv")
 
     if uploaded_file is not None:
@@ -154,7 +151,7 @@ if tab == "Carregar CSV":
             value_counts = df_proc[col].value_counts(dropna=False).head(10)
 
             # Cria figura
-            fig, ax = plt.subplots(figsize=(2, 1.5))  #gráfico pequeno
+            fig, ax = plt.subplots(figsize=(2, 1.5))  # 👈 gráfico pequeno
             bars = ax.bar(value_counts.index.astype(str), value_counts.values, color="skyblue")
 
             # Texto em cima das barras
@@ -194,9 +191,9 @@ if tab == "Carregar CSV":
                 st.info(f"⚠️ Atributo `{col}` possui {total_valores} valores. Exibindo apenas os 10 mais frequentes.")
 
 # --- ABA 2: Definição de Regras ---
-elif tab == "Regras Gerais":
+with tab[1]:
     
-    st.subheader("Configuração do algoritmo")
+    #st.header("Configuração do algoritmo e Definição das Regras")
     
     # Garantir que os dados foram carregados e processados
     if "dados_processados" in st.session_state and st.session_state.dados_processados is not None:
@@ -213,7 +210,8 @@ elif tab == "Regras Gerais":
                 key="min_support_input",
                 value=st.session_state.min_support * 100,
                 min_value=0.0,
-                max_value=100.0
+                max_value=100.0#,
+                #decimals=1
             )
             min_support = min_support_pct / 100.0
         with col_c:
@@ -222,7 +220,8 @@ elif tab == "Regras Gerais":
                 key="min_confidence_input",
                 value=st.session_state.min_confidence * 100,
                 min_value=0.0,
-                max_value=100.0
+                max_value=100.0#,
+                #decimals=1
             )
             min_confidence = min_confidence_pct / 100.0
         st.session_state.min_support = min_support
@@ -241,7 +240,7 @@ elif tab == "Regras Gerais":
         if "consequente_select" not in st.session_state:
             st.session_state.consequente_select = ""
 
-        st.subheader("Definição das meta regras")
+        st.subheader("Definição das Meta regras para Análise")
         
         # Cria 3 colunas: esquerda, central e direita
         col_e, col_cent, col_d = st.columns([2, 1, 1])
@@ -289,6 +288,7 @@ elif tab == "Regras Gerais":
         if "_reset_index" in st.session_state:
             del st.session_state._reset_index
 
+
         # Botão para adicionar regra
         if st.button("Adicionar meta regra"):
             if antecedente and consequente:
@@ -296,7 +296,18 @@ elif tab == "Regras Gerais":
                 regra = {"antecedente": antecedente, "consequente": consequente}
                 if regra not in st.session_state.regras:
                     st.session_state.regras.append(regra)
+                # Desabilita selects até o usuário clicar no "+"
+                #st.session_state.antecedente_habilitado = False
+                #st.session_state.consequente_habilitado = False
                 st.session_state._reset_index = True
+
+        # Botão para adicionar nova regra (habilita selects novamente)
+        #if st.button("➕ Compor nova meta regra"):   
+            #st.session_state.antecedente_habilitado = True
+            #st.session_state.consequente_habilitado = True
+            # Resetando selects sem sobrescrever a chave
+            # Definimos a variável temporária que vai controlar o index do selectbox
+            #st.session_state._reset_index = True
 
         # Criar lista temporária para reconstruir sem o item removido
         novas_regras = []
@@ -362,20 +373,16 @@ elif tab == "Regras Gerais":
                          f"<p style='font-size:18px;'>Meta regra: {atributo_antecedente} → {atributo_consequente}</p>",
                         unsafe_allow_html=True
                     )
-                    # Filtra as regras que correspondem exatamente à meta-regra atual
-                    base_regra_filtrada = base_regra[
-                        (base_regra["antecedente"].str.contains(atributo_antecedente, case=False, na=False)) &
-                        (base_regra["consequente"].str.contains(atributo_consequente, case=False, na=False))
-                    ]
+                    #st.subheader(f"Meta regra: {atributo_antecedente} → {atributo_consequente}")
+                    
+                    # Para cada valor distinto do consequente dentro da base_regra
+                    for cons_val, grupo_cons in base_regra.groupby("consequente"):
 
-                    # Agrupar por valor específico do consequente (ex: merged=true, merged=false)
-                    for cons_val, grupo_cons in base_regra_filtrada.groupby("consequente"):
                         st.markdown(
-                            f"<h5 style='text-align:center; color:#222; margin-top:10px; margin-bottom:4px;'>"
-                            f"{atributo_antecedente} → {cons_val}</h5>",
+                            f"<h5 style='text-align:center; color:#222; margin-top:10px; "
+                            f"margin-bottom:4px;'> {atributo_antecedente} → {cons_val} </h5>",
                             unsafe_allow_html=True
                         )
-
 
                         # 3 gráficos lado a lado: Suporte, Confiança, Lift
                         cols = st.columns(3)
@@ -412,18 +419,17 @@ elif tab == "Regras Gerais":
                             "<div style='height:1px; background:#e6e6e6; margin:6px 0;'></div>",
                             unsafe_allow_html=True
                         )          
-    else:
-        st.warning("Por favor, carregue o arquivo CSV antes de continuar.")
+    
 
 # ---------- Aba 3: Particionamento da base de dados ----------
-elif tab == "Partições":
-    st.subheader("Resumo")
+with tab[2]:
+    st.subheader("Configuração Temporal")
 
     # Verifica se o arquivo original foi carregado
     if st.session_state.dados_original is None:
-        st.warning("Por favor, carregue o arquivo CSV antes de continuar.")
+        st.warning("⚠️ Por favor, carregue o arquivo na aba 1 antes de continuar.")
     elif not st.session_state.regras:
-        st.warning("Nenhuma regra selecionada na aba 2. Selecione ao menos uma regra.")
+        st.warning("⚠️ Nenhuma regra selecionada na aba 2. Selecione ao menos uma regra.")
     else:
         df_original = st.session_state.dados_original.copy()
 
@@ -445,35 +451,33 @@ elif tab == "Partições":
         if col_data is None:
             st.error("Não foi possível detectar uma coluna de data na base.")
         else:
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                # Mostrar a primeira e última data
-                data_min = df_original[col_data].min()
-                data_max = df_original[col_data].max()
-                st.markdown("**Período completo da base de dados**")
-                st.write(f"**{data_min.date()}** até **{data_max.date()}**")
-            with col2:    
-                # Mostrar regras selecionadas
-                if st.session_state.regras:
-                    st.markdown("**Meta Regras selecionadas para análise**")
-                    for r in st.session_state.regras:
-                        st.write(f"{r['antecedente']} → {r['consequente']}")
-                else:
-                    st.info("Nenhuma regra selecionada na aba 2.")
+            #st.success(f"Coluna de data detectada: **{col_data}**")
+
+            # Mostrar a primeira e última data
+            data_min = df_original[col_data].min()
+            data_max = df_original[col_data].max()
+            st.write(f"Período da base: **{data_min.date()}** até **{data_max.date()}**")
+
+            # Mostrar regras selecionadas
+            if st.session_state.regras:
+                st.markdown("**Meta Regras selecionadas para análise:**")
+                for r in st.session_state.regras:
+                    st.write(f"{r['antecedente']} → {r['consequente']}")
+            else:
+                st.info("Nenhuma regra selecionada na aba 2.")
 
             st.markdown("---")
             
-            st.subheader("Tipo de particionamento")
-            #Novo seletor de tipo de particionamento
+            # 🔽 Novo seletor de tipo de particionamento
             tipo_particionamento = st.radio(
-                "",
-                ("Marcos temporais", "Mesmo tamanho", "Mesma quantidade de registros"),
+                "Escolha o tipo de particionamento:",
+                ("Por marcos temporais", "Por janelas fixas de tempo", "Por quantidade de registros"),
                 horizontal=True
             )
 
-            #st.markdown("---")
-            #Opção 1: por marcos temporais
-            if tipo_particionamento == "Marcos temporais":
+            st.markdown("---")
+            # 🔹 Opção 1: por marcos temporais
+            if tipo_particionamento == "Por marcos temporais":
                 #st.subheader("Defina os marcos temporais")
 
                 # Inicializa lista de marcos no session_state
@@ -563,8 +567,8 @@ elif tab == "Partições":
                             for i, p in enumerate(particoes):
                                 st.write(f"Partição {i+1}: **{p['inicio'].date()}** até **{p['fim'].date()}** — {len(p['dados'])} registros")
             
-            #Opção 2: por janela fixa de tempo (escolhendo a quantidade de tempo)
-            elif tipo_particionamento == "Mesmo tamanho":
+            # 🔹 Opção 2: por janela fixa
+            elif tipo_particionamento == "Por janelas fixas de tempo":
                 #st.subheader("Particionamento por janelas fixas")
                 # Input do usuário: quantos meses por partição
                 st.markdown("""
@@ -575,121 +579,53 @@ elif tab == "Partições":
                     }
                     </style>
                     """, unsafe_allow_html=True)
-                num_particao = st.number_input(
-                    "Número de partições",
+                meses_por_particao = st.number_input(
+                    "Meses por partição",
                     min_value=1,
                     max_value=60,
                     value=12
                 )
                 # Botão para gerar as partições
                 if st.button("Gerar partições"):
-                    particoes_fixas = analysis.particionar_por_tempo_equal_length(df_original, col_data, num_particao)
+                    particoes_fixas = analysis.particionar_por_meses(df_original, col_data=col_data, meses_por_particao=meses_por_particao)
         
                     st.success(f"Foram geradas {len(particoes_fixas)} partições!")
                     # Salva no session_state
                     st.session_state.particoes_temporais = particoes_fixas
                     # Exibir informações de cada partição em uma linha só
                     for i, p in enumerate(particoes_fixas):
-                        delta = relativedelta(p['data_max'], p['data_min'])
-                        duracao_texto = []
-                        if delta.years > 0:
-                            duracao_texto.append(f"{delta.years} ano{'s' if delta.years > 1 else ''}")
-                        if delta.months > 0:
-                            duracao_texto.append(f"{delta.months} mes{'es' if delta.months > 1 else ''}")
-                        if delta.days > 0 and delta.years == 0:
-                            duracao_texto.append(f"{delta.days} dia{'s' if delta.days > 1 else ''}")
-
-                        duracao_formatada = ", ".join(duracao_texto) or "0 dias"
-
-                        st.write(
-                            f"Partição {i+1}: {len(p['dados'])} registros | "
-                            f"{p['data_min'].date()} → {p['data_max'].date()} "
-                            f"({duracao_formatada})"
-                        )
+                        st.write(f"Partição {i+1}: {len(p['dados'])} registros | {p['data_min'].date()} → {p['data_max'].date()}")
             
-            #Opção 2: por janela fixa de tempo (escolhendo a quantidade de tempo)
-            #elif tipo_particionamento == "Por janelas fixas de tempo":
-                #st.subheader("Particionamento por janelas fixas")
-                # Input do usuário: quantos meses por partição
-            #    st.markdown("""
-            #        <style>
-            #        /* Altera apenas o campo number_input */
-            #        div[data-testid="stNumberInput"] {
-            #            width: 130px !important; /* ajuste o valor conforme quiser */
-            #        }
-            #        </style>
-            #        """, unsafe_allow_html=True)
-            #    meses_por_particao = st.number_input(
-            #        "Meses por partição",
-            #        min_value=1,
-            #        max_value=60,
-            #        value=12
-            #    )
-                # Botão para gerar as partições
-                #if st.button("Gerar partições"):
-                #    particoes_fixas = analysis.particionar_por_meses(df_original, col_data=col_data, meses_por_particao=meses_por_particao)
-        
-                #    st.success(f"Foram geradas {len(particoes_fixas)} partições!")
-                    # Salva no session_state
-                #    st.session_state.particoes_temporais = particoes_fixas
-                    # Exibir informações de cada partição em uma linha só
-                #    for i, p in enumerate(particoes_fixas):
-                #        st.write(f"Partição {i+1}: {len(p['dados'])} registros | {p['data_min'].date()} → {p['data_max'].date()}")
+            elif tipo_particionamento == "Por quantidade de registros":
+            
+                #st.subheader("Particionamento por quantidade de registros")
+                st.markdown("**Particionamento por quantidade de registros**")
 
-            elif tipo_particionamento == "Mesma quantidade de registros":
-
-                qtd_particao = numeric_text_input(
-                    label="Quantidade de partições:",
-                    key="qtd_particao_input",
-                    value=min(1, len(df_original)),
-                    min_value=1,
+                tamanho_particao = numeric_text_input(
+                    label="Quantidade de registros por partição:",
+                    key="tamanho_particao_input",
+                    value=min(100, len(df_original)),
+                    min_value=10,
                     max_value=len(df_original),
                     decimals=0,
-                    width=10
+                    width=30
                 )
 
-                qtd_particao = int(qtd_particao)
+                tamanho_particao = int(tamanho_particao)
 
                 # Botão para gerar as partições
                 if st.button("Gerar partições"):
-                    particoes_registros = analysis.particionar_por_quantidade_igual(df_original, qtd_particao, col_data=col_data)
-                    
+                    particoes_registros = analysis.particionar_por_registros(df_original, tamanho_particao, col_data=col_data)
+        
                     st.success(f"Foram geradas {len(particoes_registros)} partições!")
                     # Salva no session_state
                     st.session_state.particoes_temporais = particoes_registros
                     # Exibir informações de cada partição em uma linha só
                     for i, p in enumerate(particoes_registros):
-                       st.write(f"Partição {i+1}: {len(p['dados'])} registros | {p['data_min'].date()} → {p['data_max'].date()}")
-                                    
-            #elif tipo_particionamento == "Por quantidade de registros":
-            
-                #st.markdown("**Particionamento por quantidade de registros**")
-
-            #    tamanho_particao = numeric_text_input(
-            #        label="Quantidade de registros por partição:",
-            #        key="tamanho_particao_input",
-            #        value=min(100, len(df_original)),
-            #        min_value=10,
-            #        max_value=len(df_original),
-            #        decimals=0,
-            #        width=30
-            #    )
-
-            #    tamanho_particao = int(tamanho_particao)
-
-                # Botão para gerar as partições
-            #    if st.button("Gerar partições"):
-            #        particoes_registros = analysis.particionar_por_registros(df_original, tamanho_particao, col_data=col_data)
-        
-            #        st.success(f"Foram geradas {len(particoes_registros)} partições!")
-                    # Salva no session_state
-            #        st.session_state.particoes_temporais = particoes_registros
-                    # Exibir informações de cada partição em uma linha só
-            #        for i, p in enumerate(particoes_registros):
-            #           st.write(f"Partição {i+1}: {len(p['dados'])} registros | {p['data_min'].date()} → {p['data_max'].date()}")
+                        st.write(f"Partição {i+1}: {len(p['dados'])} registros | {p['data_min'].date()} → {p['data_max'].date()}")
                         
 # ---------- Aba 4: Análise temporal ----------
-elif tab == "Análise Temporal":
+with tab[3]:
     st.subheader("Análise Temporal das Regras")
 
     if "particoes_temporais" not in st.session_state:
@@ -697,7 +633,7 @@ elif tab == "Análise Temporal":
 
     # Verifica se o arquivo original foi carregado
     if st.session_state.dados_original is None:
-        st.warning("Por favor, carregue o arquivo CSV antes de continuar.")
+        st.warning("Por favor, carregue o arquivo na aba 1 antes de continuar.")
     elif not st.session_state.regras:
         st.warning("Nenhuma regra selecionada na aba 2. Selecione ao menos uma regra.")
     elif not st.session_state.particoes_temporais:

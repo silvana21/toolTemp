@@ -3,6 +3,7 @@ import pandas as pd
 from mlxtend.frequent_patterns import apriori, association_rules
 import io
 import matplotlib.pyplot as plt
+import numpy as np
 
 def preparar_dados_para_mineracao_from_df(df_original):
     """
@@ -701,3 +702,90 @@ def particionar_por_registros(df, tamanho_particao, col_data):
 
     return particoes
 
+def particionar_por_quantidade_igual(df, n_particoes, col_data):
+    """
+    Divide o DataFrame em n_particoes aproximadamente iguais em número de registros.
+
+    Parâmetros:
+        df (pd.DataFrame): base completa
+        n_particoes (int): número de partições desejadas
+        col_data (str): nome da coluna de data usada para marcar os intervalos
+
+    Retorna:
+        list[dict]: lista de partições no formato:
+            [
+                {"data_min": ..., "data_max": ..., "dados": df_part},
+                ...
+            ]
+    """
+    # Evita criar mais partições do que registros
+    n_particoes = min(n_particoes, len(df))
+
+    # Índices de corte (divisão igualitária)
+    cortes = np.linspace(0, len(df), n_particoes + 1, dtype=int)
+
+    particoes = []
+    for i in range(n_particoes):
+        inicio, fim = cortes[i], cortes[i + 1]
+        df_part = df.iloc[inicio:fim].copy()
+
+        if not df_part.empty:
+            particoes.append({
+                "data_min": df_part[col_data].min(),
+                "data_max": df_part[col_data].max(),
+                "dados": df_part,
+            })
+
+    return particoes
+
+def particionar_por_tempo_equal_length(df, col_data, n_particoes):
+    """
+    Particiona o DataFrame em n_particoes com intervalos de tempo iguais.
+    Retorna uma lista de dicionários com 'data_min', 'data_max' e 'dados'.
+    
+    Parâmetros:
+        df (pd.DataFrame): base de dados completa
+        col_data (str): nome da coluna de data
+        n_particoes (int): número de partições desejadas
+        
+    Retorna:
+        list[dict]: lista com as partições e seus intervalos
+    """
+    # Garante que a coluna está em formato datetime
+    df[col_data] = pd.to_datetime(df[col_data], errors='coerce')
+    df = df.dropna(subset=[col_data])
+
+    # Ordena os dados pela data
+    df = df.sort_values(by=col_data).reset_index(drop=True)
+
+    # Define intervalo total de tempo
+    data_min_global = df[col_data].min()
+    data_max_global = df[col_data].max()
+
+    # Calcula o intervalo de tempo para cada partição
+    duracao_total = data_max_global - data_min_global
+    duracao_particao = duracao_total / n_particoes
+
+    particoes = []
+    inicio = data_min_global
+
+    # Cria partições
+    for i in range(n_particoes):
+        fim = inicio + duracao_particao
+
+        # Última partição inclui o limite máximo
+        if i == n_particoes - 1:
+            df_part = df[(df[col_data] >= inicio) & (df[col_data] <= data_max_global)]
+        else:
+            df_part = df[(df[col_data] >= inicio) & (df[col_data] < fim)]
+
+        if not df_part.empty:
+            particoes.append({
+                "data_min": df_part[col_data].min(),
+                "data_max": df_part[col_data].max(),
+                "dados": df_part
+            })
+
+        inicio = fim
+
+    return particoes
