@@ -4,6 +4,9 @@ from mlxtend.frequent_patterns import apriori, association_rules
 import io
 import matplotlib.pyplot as plt
 import numpy as np
+import tempfile
+import subprocess
+import os
 
 def preparar_dados_para_mineracao_from_df(df_original):
     """
@@ -44,6 +47,70 @@ def preparar_para_apriori(df):
     df_oht = pd.get_dummies(df, prefix_sep='=')
     return df_oht
 
+
+def gerar_regras_com_r(df, sup=0.01, conf=0.01, script_path="gerar_regras.R"):
+    """
+    Gera regras chamando gerar_regras.R e passando sup/conf como argumentos.
+    Usa arquivos temporários (robusto para Streamlit) e retorna no mesmo formato do mlxtend.
+    """
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    # salva input temporário em UTF-8
+    tmp_in = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
+    tmp_out = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
+    tmp_in.close()
+    tmp_out.close()
+
+    try:
+        df.to_csv(tmp_in.name, index=False, encoding="utf-8")
+
+        # chama o R passando 4 argumentos: input, output, sup, conf
+        cmd = [
+            "Rscript",
+            script_path,
+            tmp_in.name,
+            tmp_out.name,
+            str(sup),
+            str(conf)
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            print("=== ERRO R (stdout) ===")
+            print(result.stdout)
+            print("=== ERRO R (stderr) ===")
+            print(result.stderr)
+            raise RuntimeError("Erro ao executar Rscript")
+
+        # lê resultado
+        if os.path.exists(tmp_out.name) and os.path.getsize(tmp_out.name) > 0:
+            df_regras = pd.read_csv(tmp_out.name, encoding="utf-8")
+        else:
+            df_regras = pd.DataFrame()
+
+        # padroniza colunas para o formato do app
+        if not df_regras.empty:
+            # traduz nomes e garante ordem
+            rename_map = {
+                'support': 'suporte',
+                'confidence': 'confianca'
+            }
+            df_regras.rename(columns=rename_map, inplace=True, errors='ignore')
+
+            cols = ['antecedente', 'consequente', 'suporte', 'confianca', 'lift']
+            df_regras = df_regras[[c for c in cols if c in df_regras.columns]]
+
+        return df_regras
+
+    finally:
+        # cleanup
+        for p in (tmp_in.name, tmp_out.name):
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
 
 def gerar_regras_com_mlxtend(df, sup, conf):
     """Gera regras e retorna DataFrame formatado com métricas traduzidas."""

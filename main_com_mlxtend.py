@@ -334,14 +334,9 @@ elif tab == "Regras Gerais":
                 conf=st.session_state.min_confidence
             )
             st.session_state.df_regras = df_regras
-            
-            #mudar isso depois
-            base_regra = df_regras
-            st.session_state.base_regra = df_regras
-            #st.dataframe(df_regras)
-
-            #base_regra = analysis.filtrar_regras_por_atributo(st.session_state.df_regras, st.session_state.regras)
-            #st.session_state.base_regra = base_regra
+                 
+            base_regra = analysis.filtrar_regras_por_atributo(st.session_state.df_regras, st.session_state.regras)
+            st.session_state.base_regra = base_regra
                      
             # Mostrar as regras na tela
             # --- Análise Geral por regra escolhida  ---
