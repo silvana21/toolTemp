@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 from streamlit_option_menu import option_menu
 import re
 from dateutil.relativedelta import relativedelta
+import plotly.express as px
+import time
 
 st.set_page_config(page_title="Análise Temporal de Regras de Associação", layout="wide")
 
@@ -92,6 +94,13 @@ def numeric_text_input(label, key, value=0.0, min_value=None, max_value=None, de
         return float(value)
 
 # ----------------- Abas -----------------
+if "df" not in st.session_state:
+    st.session_state.df = None  # arquivo carregado
+if "df_regras" not in st.session_state:
+    st.session_state.df_regras = None  # regras geradas
+if "regras" not in st.session_state:
+    st.session_state.regras = []  # meta-regras selecionadas
+
 # --- MENU LATERAL ---
 with st.sidebar:
     st.markdown("### 🧭 Navegação")
@@ -125,8 +134,10 @@ if tab == "Carregar CSV":
     st.subheader("Carregar CSV")
     uploaded_file = st.file_uploader("Escolha um arquivo CSV", type="csv")
 
+    # 🔹 Caso o usuário carregue um novo arquivo
     if uploaded_file is not None:
         st.session_state.dados_original = pd.read_csv(uploaded_file)
+        st.session_state.nome_arquivo = uploaded_file.name  # 🔹 salva o nome do arquivo
 
         # Resumo
         df = st.session_state.dados_original
@@ -141,58 +152,72 @@ if tab == "Carregar CSV":
             st.info(f"Atributos removidos (datas/numéricos): {atributos_remover}")
         else:
             st.info("Nenhum atributo de data/numérico foi removido.")
-        
-        #Resumo dos atributos
+
+    # 🔹 Caso o usuário não carregue nada agora, mas já tenha carregado antes
+    elif st.session_state.dados_original is not None:
+        df = st.session_state.dados_original
+        df_proc = st.session_state.dados_processados
+        st.info(f"📂 Arquivo mantido na memória: **{st.session_state.nome_arquivo}** "
+        f"({len(df)} registros, {len(df.columns)} colunas).")
+        st.markdown("<p style='font-size:14px; color:#555;'>Você pode prosseguir para a próxima aba sem recarregar o arquivo.</p>", unsafe_allow_html=True)
+
+    else:
+        st.warning("Nenhum arquivo carregado ainda.")
+        df_proc = None  # evita erro abaixo
+
+    # 🔹 Se já houver dados processados (novos ou salvos), mostrar resumo sempre
+    if st.session_state.dados_processados is not None:
+        df_proc = st.session_state.dados_processados
+
         st.subheader("Resumo dos Atributos (valores e frequência)")
-        
-        cols = st.columns(3)  # cria 3 colunas
-        col_index = 0  # controla em qual coluna inserir
+        cols = st.columns(3)
+        col_index = 0
         
         for col in df_proc.columns:
-                    
-            # Pega os 10 valores mais comuns
             value_counts = df_proc[col].value_counts(dropna=False).head(10)
-
-            # Cria figura
-            fig, ax = plt.subplots(figsize=(2, 1.5))  #gráfico pequeno
+            fig, ax = plt.subplots(figsize=(2, 1.5))
             bars = ax.bar(value_counts.index.astype(str), value_counts.values, color="skyblue")
 
-            # Texto em cima das barras
             for bar in bars:
                 height = bar.get_height()
                 ax.text(bar.get_x() + bar.get_width()/2, height, str(height),
                         ha="center", va="bottom", fontsize=5)
 
-            # ajusta limite do eixo Y para dar espaço
             max_val = value_counts.max()
-            ax.set_ylim(0, max_val * 1.15)  # 15% acima da barra mais alta
-            
-            # Ajustes visuais
+            ax.set_ylim(0, max_val * 1.15)
             ax.tick_params(axis="x", labelsize=5, rotation=45)
             ax.tick_params(axis="y", labelsize=5)
             plt.tight_layout(pad=0.3)
-            # coloca o gráfico na coluna atual
+
             with cols[col_index]:
                 st.markdown(
                     f"<p style='text-align: center; font-weight: bold;'>{col}</p>",
                     unsafe_allow_html=True
                 )
                 st.pyplot(fig, use_container_width=False)
-                
-            # avança para a próxima coluna
-            col_index += 1
 
-            # se já preencheu 3 colunas, cria nova linha
+            col_index += 1
             if col_index == 3:
-                st.markdown("<div style='height:1px; background-color:#e0e0e0; margin:5px 0;'></div>",
-                    unsafe_allow_html=True)
+                st.markdown(
+                    "<div style='height:1px; background-color:#e0e0e0; margin:5px 0;'></div>",
+                    unsafe_allow_html=True
+                )
                 cols = st.columns(3)
                 col_index = 0
 
             total_valores = df_proc[col].nunique(dropna=False)
             if total_valores > 10:
-                st.info(f"⚠️ Atributo `{col}` possui {total_valores} valores. Exibindo apenas os 10 mais frequentes.")
+                st.info(f"Atributo `{col}` possui {total_valores} valores. Exibindo apenas os 10 mais frequentes.")
 
+    # 🔹 Caso o usuário não carregue nada agora, mas já tenha carregado antes
+    elif st.session_state.dados_original is not None:
+        df = st.session_state.dados_original
+        df_proc = st.session_state.dados_processados
+        st.info(f"Arquivo mantido na memória: {len(df)} registros e {len(df.columns)} colunas.")
+        st.markdown("<p style='font-size:14px; color:#555;'>Você pode prosseguir para a próxima aba sem recarregar o arquivo.</p>", unsafe_allow_html=True)
+
+    else:
+        st.warning("Nenhum arquivo carregado ainda.")
 # --- ABA 2: Definição de Regras ---
 elif tab == "Regras Gerais":
     
@@ -327,31 +352,60 @@ elif tab == "Regras Gerais":
         
         # Botão para gerar regras filtradas
         if st.button("Gerar regras"):
-            #Mudar esta função para usar o mlxtend, se necessário
-            df_regras = analysis.gerar_regras_com_r(
-                st.session_state.dados_processados,
-                sup=st.session_state.min_support,
-                conf=st.session_state.min_confidence
-            )
-            st.session_state.df_regras = df_regras
-            
-            #mudar isso depois
-            base_regra = df_regras
-            st.session_state.base_regra = df_regras
-            #st.dataframe(df_regras)
+            progress = st.progress(0)
+            inicio_total = time.time()
 
-            #base_regra = analysis.filtrar_regras_por_atributo(st.session_state.df_regras, st.session_state.regras)
-            #st.session_state.base_regra = base_regra
-                     
-            # Mostrar as regras na tela
-            # --- Análise Geral por regra escolhida  ---
-            if base_regra.empty:
-                st.warning("Nenhuma regra encontrada para os filtros selecionados.")
+            progress.progress(10)
+            st.info("🔄 Preparando dados...")
+
+            # === GERAÇÃO DAS REGRAS ===
+            inicio_regras = time.time()
+            progress.progress(30)
+            st.info("⚙️ Gerando regras de associação...")
+
+            todas_regras = []
+
+            for meta in st.session_state.regras:
+                lhs_attr = meta["antecedente"]
+                rhs_attr = meta["consequente"]
+
+                st.write(f"Gerando regras: {lhs_attr} ➜ {rhs_attr}")
+
+                df_temp = analysis.gerar_regras_com_r(
+                    st.session_state.dados_processados,
+                    sup=st.session_state.min_support,
+                    conf=st.session_state.min_confidence,
+                    lhs_attr=lhs_attr,
+                    rhs_attr=rhs_attr
+                )
+
+                if not df_temp.empty:
+                    df_temp["lhs_attr"] = lhs_attr
+                    df_temp["rhs_attr"] = rhs_attr
+                    todas_regras.append(df_temp)
+
+            fim_regras = time.time()
+            tempo_regras = fim_regras - inicio_regras
+
+            if todas_regras:
+                df_regras = pd.concat(todas_regras, ignore_index=True)
+                st.session_state.df_regras = df_regras  # 🔹 salva as regras na sessão
+                st.success(f"{len(df_regras)} regras geradas no total.")
             else:
+                st.warning("Nenhuma regra foi gerada para as meta-regras selecionadas.")
+                df_regras = pd.DataFrame()
+                st.session_state.df_regras = df_regras  # 🔹 garante que o valor exista
+
+            progress.progress(70)
+            st.info("📊 Montando gráficos...")
+
+            # === GERAÇÃO DOS GRÁFICOS ===
+            inicio_graficos = time.time()
+
+            if not df_regras.empty:
                 st.subheader("Análise Geral das Regras")
-                
-                # Normaliza nomes, se vierem com maiúsculas
-                df_plot = base_regra.rename(columns={
+
+                df_plot = df_regras.rename(columns={
                     "Suporte": "suporte",
                     "Confianca": "confianca",
                     "Lift": "lift",
@@ -359,67 +413,181 @@ elif tab == "Regras Gerais":
                     "Consequente": "consequente",
                 })
 
-                # Para cada regra definida pelo usuário, gere seus gráficos isoladamente
                 for regra_user in st.session_state.regras:
                     atributo_antecedente = regra_user["antecedente"]
                     atributo_consequente = regra_user["consequente"]
 
                     st.markdown(
-                         f"<p style='font-size:18px;'>Meta regra: {atributo_antecedente} → {atributo_consequente}</p>",
+                        f"<p style='font-size:18px;'>Meta regra: {atributo_antecedente} → {atributo_consequente}</p>",
                         unsafe_allow_html=True
                     )
-                    # Filtra as regras que correspondem exatamente à meta-regra atual
-                    base_regra_filtrada = base_regra[
-                        (base_regra["antecedente"].str.contains(atributo_antecedente, case=False, na=False)) &
-                        (base_regra["consequente"].str.contains(atributo_consequente, case=False, na=False))
+
+                    # Filtrar apenas as regras compatíveis com a meta-regra
+                    df_meta = df_plot[
+                        df_plot["antecedente"].str.contains(atributo_antecedente, case=False)
+                        & df_plot["consequente"].str.contains(atributo_consequente, case=False)
                     ]
 
-                    # Agrupar por valor específico do consequente (ex: merged=true, merged=false)
-                    for cons_val, grupo_cons in base_regra_filtrada.groupby("consequente"):
+                    if df_meta.empty:
+                        st.warning(f"Nenhuma regra correspondente a {atributo_antecedente} → {atributo_consequente}.")
+                        continue
+                    
+                    # Agrupar apenas dentro do subconjunto filtrado
+                    for cons_val, grupo_cons in df_meta.groupby("consequente"):
                         st.markdown(
                             f"<h5 style='text-align:center; color:#222; margin-top:10px; margin-bottom:4px;'>"
                             f"{atributo_antecedente} → {cons_val}</h5>",
                             unsafe_allow_html=True
                         )
 
-
-                        # 3 gráficos lado a lado: Suporte, Confiança, Lift
                         cols = st.columns(3)
+                        # Paleta fixa para cada medida
+                        cores_fixas = {
+                            "suporte": "#3c3c3c",    # cinza claro
+                            "confianca": "#666666",  # cinza
+                            "lift": "#b5b5b5"        # cinza escuro
+                        }
+
                         for i, medida in enumerate(["suporte", "confianca", "lift"]):
                             with cols[i]:
-                                fig, ax = plt.subplots(figsize=(2.0, 2.0))
-
-                                # eixo X: apenas valores do antecedente
-                                bars = ax.bar(
-                                    grupo_cons["antecedente"].astype(str),
-                                    grupo_cons[medida]
+                                fig = px.bar(
+                                    grupo_cons,
+                                    x="antecedente",
+                                    y=medida,
+                                    text=grupo_cons[medida].apply(lambda x: f"{x:.2f}"),
+                                    title=medida.capitalize(),
                                 )
 
-                                # estética compacta
-                                ymax = float(grupo_cons[medida].max())
-                                ax.set_ylim(0, ymax * 1.15 if ymax > 0 else 1)
-                                ax.tick_params(axis="x", labelsize=6, rotation=45)
-                                ax.tick_params(axis="y", labelsize=6)
-                                ax.set_title(medida.capitalize(), fontsize=8, pad=2)
+                                fig.update_traces(
+                                    marker_color=cores_fixas[medida],  # 🔹 cor única por métrica
+                                    marker_line_color="rgba(0,0,0,0.2)",  # borda leve
+                                    marker_line_width=1,
+                                    width=0.5,  # 🔹 barras mais finas
+                                    texttemplate="%{text}",
+                                    textposition="outside",
+                                    textfont=dict(size=10),
+                                    cliponaxis=False
+                                )
 
-                                # valores em cima das barras
-                                for b in bars:
-                                    h = b.get_height()
-                                    ax.text(
-                                        b.get_x() + b.get_width()/2, h, f"{h:.2f}",
-                                        ha="center", va="bottom", fontsize=6
-                                    )
+                                fig.update_layout(
+                                    height=300,
+                                    margin=dict(l=10, r=10, t=40, b=40),
+                                    title_font=dict(size=14),
+                                    xaxis=dict(
+                                        tickangle=45,
+                                        tickfont=dict(size=10),
+                                        title=""  # remove rótulo "antecedente"
+                                    ),
+                                    yaxis=dict(title=None, tickfont=dict(size=10)),
+                                    plot_bgcolor="white",
+                                    paper_bgcolor="white",
+                                    showlegend=False
+                                )
 
-                                plt.tight_layout(pad=0.3)
-                                st.pyplot(fig, use_container_width=False)
+                                st.plotly_chart(
+                                    fig,
+                                    use_container_width=True,
+                                    key=f"{atributo_antecedente}_{atributo_consequente}_{cons_val}_{medida}"
+                                )
 
-                        # separador fino entre linhas (cada valor do consequente)
-                        st.markdown(
-                            "<div style='height:1px; background:#e6e6e6; margin:6px 0;'></div>",
-                            unsafe_allow_html=True
-                        )          
+            fim_graficos = time.time()
+            tempo_graficos = fim_graficos - inicio_graficos
+
+            progress.progress(100)
+            st.success("✅ Regras geradas e gráficos exibidos com sucesso!")
+
+            fim_total = time.time()
+            tempo_total = fim_total - inicio_total
+
+            # === EXIBE OS TEMPOS DE CADA ETAPA ===
+            st.markdown("---")
+            st.info(f"⚙️ Tempo para gerar regras: **{tempo_regras:.2f} segundos**")
+            st.info(f"📊 Tempo para gerar gráficos: **{tempo_graficos:.2f} segundos**")
+            st.success(f"⏱️ Tempo total: **{tempo_total:.2f} segundos**")
+
+        # 🔹 Se já houver regras salvas na sessão, reexibir automaticamente os gráficos
+        elif "df_regras" in st.session_state and st.session_state.df_regras is not None and not st.session_state.df_regras.empty:
+            st.subheader("Análise Geral das Regras (mantida na memória)")
+
+            df_regras = st.session_state.df_regras
+            df_plot = df_regras.rename(columns={
+                "Suporte": "suporte",
+                "Confianca": "confianca",
+                "Lift": "lift",
+                "Antecedente": "antecedente",
+                "Consequente": "consequente",
+            })
+
+            for regra_user in st.session_state.regras:
+                atributo_antecedente = regra_user["antecedente"]
+                atributo_consequente = regra_user["consequente"]
+
+                st.markdown(
+                    f"<p style='font-size:18px;'>Meta regra: {atributo_antecedente} → {atributo_consequente}</p>",
+                    unsafe_allow_html=True
+                )
+
+                df_meta = df_plot[
+                    df_plot["antecedente"].str.contains(atributo_antecedente, case=False)
+                    & df_plot["consequente"].str.contains(atributo_consequente, case=False)
+                ]
+
+                if df_meta.empty:
+                    continue
+
+                for cons_val, grupo_cons in df_meta.groupby("consequente"):
+                    st.markdown(
+                        f"<h5 style='text-align:center; color:#222; margin-top:10px; margin-bottom:4px;'>"
+                        f"{atributo_antecedente} → {cons_val}</h5>",
+                        unsafe_allow_html=True
+                    )
+
+                    cols = st.columns(3)
+                    cores_fixas = {
+                        "suporte": "#3c3c3c",
+                        "confianca": "#666666",
+                        "lift": "#b5b5b5"
+                    }
+
+                    for i, medida in enumerate(["suporte", "confianca", "lift"]):
+                        with cols[i]:
+                            fig = px.bar(
+                                grupo_cons,
+                                x="antecedente",
+                                y=medida,
+                                text=grupo_cons[medida].apply(lambda x: f"{x:.2f}"),
+                                title=medida.capitalize(),
+                            )
+                            fig.update_traces(
+                                marker_color=cores_fixas[medida],
+                                marker_line_color="rgba(0,0,0,0.2)",
+                                marker_line_width=1,
+                                width=0.5,
+                                texttemplate="%{text}",
+                                textposition="outside",
+                                textfont=dict(size=10),
+                                cliponaxis=False
+                            )
+                            fig.update_layout(
+                                height=300,
+                                margin=dict(l=10, r=10, t=40, b=40),
+                                title_font=dict(size=14),
+                                title_x=0.5,  # 🔹 centraliza o título
+                                xaxis=dict(tickangle=45, tickfont=dict(size=10), title=""),
+                                yaxis=dict(title=None, tickfont=dict(size=10)),
+                                plot_bgcolor="white",
+                                paper_bgcolor="white",
+                                showlegend=False
+                            )
+                            st.plotly_chart(
+                                fig,
+                                use_container_width=True,
+                                key=f"persist_{atributo_antecedente}_{atributo_consequente}_{cons_val}_{medida}"
+                            )
+
     else:
         st.warning("Por favor, carregue o arquivo CSV antes de continuar.")
+
 
 # ---------- Aba 3: Particionamento da base de dados ----------
 elif tab == "Partições":

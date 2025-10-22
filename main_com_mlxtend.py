@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from streamlit_option_menu import option_menu
 import re
 from dateutil.relativedelta import relativedelta
+import time
 
 st.set_page_config(page_title="Análise Temporal de Regras de Associação", layout="wide")
 
@@ -327,25 +328,41 @@ elif tab == "Regras Gerais":
         
         # Botão para gerar regras filtradas
         if st.button("Gerar regras"):
-            #Mudar esta função para usar o mlxtend, se necessário
-            df_regras = analysis.gerar_regras_com_r(
+            progress = st.progress(0)
+            inicio_total = time.time()
+
+            # Etapa 1: geração das regras
+            st.info("⚙️ Gerando regras de associação (mlxtend)...")
+            progress.progress(25)
+            inicio_regras = time.time()
+
+            df_regras = analysis.gerar_regras_com_mlxtend(
                 st.session_state.dados_processados,
                 sup=st.session_state.min_support,
                 conf=st.session_state.min_confidence
             )
-            st.session_state.df_regras = df_regras
-                 
-            base_regra = analysis.filtrar_regras_por_atributo(st.session_state.df_regras, st.session_state.regras)
+
+            fim_regras = time.time()
+            tempo_regras = fim_regras - inicio_regras
+            progress.progress(50)
+
+            # Etapa 2: filtragem
+            st.info("🔎 Filtrando regras conforme meta-regras...")
+            base_regra = analysis.filtrar_regras_por_atributo(
+                df_regras, st.session_state.regras
+            )
             st.session_state.base_regra = base_regra
-                     
-            # Mostrar as regras na tela
-            # --- Análise Geral por regra escolhida  ---
+            progress.progress(65)
+
+            # Etapa 3: gráficos
+            st.info("📊 Gerando gráficos de análise...")
+            inicio_graficos = time.time()
+
             if base_regra.empty:
                 st.warning("Nenhuma regra encontrada para os filtros selecionados.")
             else:
                 st.subheader("Análise Geral das Regras")
                 
-                # Normaliza nomes, se vierem com maiúsculas
                 df_plot = base_regra.rename(columns={
                     "Suporte": "suporte",
                     "Confianca": "confianca",
@@ -354,22 +371,20 @@ elif tab == "Regras Gerais":
                     "Consequente": "consequente",
                 })
 
-                # Para cada regra definida pelo usuário, gere seus gráficos isoladamente
                 for regra_user in st.session_state.regras:
                     atributo_antecedente = regra_user["antecedente"]
                     atributo_consequente = regra_user["consequente"]
 
                     st.markdown(
-                         f"<p style='font-size:18px;'>Meta regra: {atributo_antecedente} → {atributo_consequente}</p>",
+                        f"<p style='font-size:18px;'>Meta regra: {atributo_antecedente} → {atributo_consequente}</p>",
                         unsafe_allow_html=True
                     )
-                    # Filtra as regras que correspondem exatamente à meta-regra atual
+
                     base_regra_filtrada = base_regra[
                         (base_regra["antecedente"].str.contains(atributo_antecedente, case=False, na=False)) &
                         (base_regra["consequente"].str.contains(atributo_consequente, case=False, na=False))
                     ]
 
-                    # Agrupar por valor específico do consequente (ex: merged=true, merged=false)
                     for cons_val, grupo_cons in base_regra_filtrada.groupby("consequente"):
                         st.markdown(
                             f"<h5 style='text-align:center; color:#222; margin-top:10px; margin-bottom:4px;'>"
@@ -377,27 +392,22 @@ elif tab == "Regras Gerais":
                             unsafe_allow_html=True
                         )
 
-
-                        # 3 gráficos lado a lado: Suporte, Confiança, Lift
                         cols = st.columns(3)
                         for i, medida in enumerate(["suporte", "confianca", "lift"]):
                             with cols[i]:
                                 fig, ax = plt.subplots(figsize=(2.0, 2.0))
 
-                                # eixo X: apenas valores do antecedente
                                 bars = ax.bar(
                                     grupo_cons["antecedente"].astype(str),
                                     grupo_cons[medida]
                                 )
 
-                                # estética compacta
                                 ymax = float(grupo_cons[medida].max())
                                 ax.set_ylim(0, ymax * 1.15 if ymax > 0 else 1)
                                 ax.tick_params(axis="x", labelsize=6, rotation=45)
                                 ax.tick_params(axis="y", labelsize=6)
                                 ax.set_title(medida.capitalize(), fontsize=8, pad=2)
 
-                                # valores em cima das barras
                                 for b in bars:
                                     h = b.get_height()
                                     ax.text(
@@ -408,11 +418,20 @@ elif tab == "Regras Gerais":
                                 plt.tight_layout(pad=0.3)
                                 st.pyplot(fig, use_container_width=False)
 
-                        # separador fino entre linhas (cada valor do consequente)
-                        st.markdown(
-                            "<div style='height:1px; background:#e6e6e6; margin:6px 0;'></div>",
-                            unsafe_allow_html=True
-                        )          
+                        st.markdown("<div style='height:1px; background:#e6e6e6; margin:6px 0;'></div>", unsafe_allow_html=True)
+
+            fim_graficos = time.time()
+            tempo_graficos = fim_graficos - inicio_graficos
+
+            progress.progress(100)
+            fim_total = time.time()
+            tempo_total = fim_total - inicio_total
+
+            # Exibe resultados de tempo
+            st.markdown("---")
+            st.info(f"⚙️ Tempo para gerar regras (mlxtend): **{tempo_regras:.2f} s**")
+            st.info(f"📊 Tempo para montar gráficos: **{tempo_graficos:.2f} s**")
+            st.success(f"⏱️ Tempo total: **{tempo_total:.2f} s**")          
     else:
         st.warning("Por favor, carregue o arquivo CSV antes de continuar.")
 

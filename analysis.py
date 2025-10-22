@@ -48,7 +48,8 @@ def preparar_para_apriori(df):
     return df_oht
 
 
-def gerar_regras_com_r(df, sup=0.01, conf=0.01, script_path="gerar_regras.R"):
+def gerar_regras_com_r(df, sup=0.01, conf=0.01, script_path="gerar_regras.R",
+                       lhs_attr=None, rhs_attr=None):
     """
     Gera regras chamando gerar_regras.R e passando sup/conf como argumentos.
     Usa arquivos temporários (robusto para Streamlit) e retorna no mesmo formato do mlxtend.
@@ -72,7 +73,9 @@ def gerar_regras_com_r(df, sup=0.01, conf=0.01, script_path="gerar_regras.R"):
             tmp_in.name,
             tmp_out.name,
             str(sup),
-            str(conf)
+            str(conf),
+            lhs_attr or "",
+            rhs_attr or ""
         ]
 
         result = subprocess.run(cmd, capture_output=True, text=True)
