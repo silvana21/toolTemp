@@ -10,8 +10,10 @@ import re
 from dateutil.relativedelta import relativedelta
 import plotly.express as px
 import time
+from streamlit_sortables import sort_items
 
 st.set_page_config(page_title="Análise Temporal de Regras de Associação", layout="wide")
+
 
 #st.title("Análise Temporal de Regras de Associação")
 
@@ -80,7 +82,6 @@ def numeric_text_input(label, key, value=0.0, min_value=None, max_value=None, de
     # cria o text_input que dispara _sanitize_input ao alterar (quando o widget perde foco / Enter)
     st.text_input(
         label,
-        value=st.session_state[key],
         key=key,
         on_change=_sanitize_input,
         args=(key, min_value, max_value, decimals)
@@ -107,7 +108,7 @@ with st.sidebar:
 
     tab = option_menu(
         None,
-        ["Carregar CSV", "Regras Gerais", "Partições", "Análise Temporal"],
+        ["Carregar CSV", "Regras Gerais", "Análise Temporal"],
         icons=["file-earmark-arrow-up", "diagram-3", "calendar3", "bar-chart"],
         menu_icon="cast",
         default_index=0,
@@ -157,34 +158,102 @@ if tab == "Carregar CSV":
     elif st.session_state.dados_original is not None:
         df = st.session_state.dados_original
         df_proc = st.session_state.dados_processados
-        st.info(f"📂 Arquivo mantido na memória: **{st.session_state.nome_arquivo}** "
+        st.info(f"Arquivo mantido na memória: **{st.session_state.nome_arquivo}** "
         f"({len(df)} registros, {len(df.columns)} colunas).")
         st.markdown("<p style='font-size:14px; color:#555;'>Você pode prosseguir para a próxima aba sem recarregar o arquivo.</p>", unsafe_allow_html=True)
 
     else:
-        st.warning("Nenhum arquivo carregado ainda.")
+        
         df_proc = None  # evita erro abaixo
+    
+    # ===== Definir ordem dos valores (opcional) =====
+    if "dados_processados" in st.session_state and st.session_state.dados_processados is not None:
+        st.subheader("Definir ordem dos valores (opcional)")
+        st.markdown(
+            "<p style='font-size:14px; color:#666;'>Arraste para ordenar (se disponível) ou edite no campo de texto.</p>",
+            unsafe_allow_html=True
+        )
 
-    # 🔹 Se já houver dados processados (novos ou salvos), mostrar resumo sempre
+        # Tenta carregar o componente interativo
+        try:
+            from streamlit_sortables import sort_items
+            _HAS_SORTABLES = True
+        except Exception:
+            _HAS_SORTABLES = False
+
+        df_proc = st.session_state.dados_processados
+
+        # Colunas candidatas (categorias de baixa cardinalidade)
+        colunas_categoricas = [
+            col for col in df_proc.columns
+            if df_proc[col].nunique(dropna=False) <= 20
+        ]
+
+        for col in colunas_categoricas:
+            serie = df_proc[col]
+            valores_unicos = serie.drop_duplicates().astype(str).fillna("NaN").tolist()
+            ordem_key = f"ordem_{col}"
+            ordem_atual = st.session_state.get(ordem_key, valores_unicos)
+
+            # 🔹 Uma única coluna de largura controlada (lado esquerdo)
+            col_esq, _ = st.columns([1, 3])  # controla o espaço ocupado (1/4 da página)
+            with col_esq:
+                st.markdown(f"**{col}**")
+
+                # componente interativo de ordenação
+                new_order = sort_items(
+                    items=ordem_atual,
+                    direction="vertical",
+                    key=f"sort_{col}_ordem_valores"
+                )
+                if isinstance(new_order, list) and len(new_order) > 0:
+                    st.session_state[ordem_key] = new_order
+
+                # campo de texto (logo abaixo, também à esquerda)
+                txt = st.text_input(
+                    "Editar ordem (separada por vírgulas)",
+                    value=", ".join(st.session_state[ordem_key]),
+                    key=f"txt_{col}_ordem_valores"
+                )
+                st.session_state[ordem_key] = [v.strip() for v in txt.split(",") if v.strip() != ""]
+
+
+        st.caption("As ordens definidas acima serão aplicadas automaticamente nos gráficos.")
+
+    # Se já houver dados processados (novos ou salvos), mostrar resumo sempre
     if st.session_state.dados_processados is not None:
         df_proc = st.session_state.dados_processados
 
         st.subheader("Resumo dos Atributos (valores e frequência)")
         cols = st.columns(3)
         col_index = 0
-        
+
         for col in df_proc.columns:
-            value_counts = df_proc[col].value_counts(dropna=False).head(10)
+            # 🔹 Verifica se o usuário definiu uma ordem para este atributo
+            ordem_key = f"ordem_{col}"
+            if ordem_key in st.session_state:
+                ordem_valores = st.session_state[ordem_key]
+                # Converte a coluna para categórica ordenada e reconta os valores
+                col_cat = pd.Categorical(
+                    df_proc[col].astype(str).fillna("NaN"),
+                    categories=ordem_valores,
+                    ordered=True
+                )
+                value_counts = pd.Series(col_cat).value_counts(dropna=False).reindex(ordem_valores)
+            else:
+                # 🔹 Caso não haja ordem definida, usa o comportamento original
+                value_counts = df_proc[col].value_counts(dropna=False).head(10)
+
             fig, ax = plt.subplots(figsize=(2, 1.5))
             bars = ax.bar(value_counts.index.astype(str), value_counts.values, color="skyblue")
 
             for bar in bars:
                 height = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width()/2, height, str(height),
+                ax.text(bar.get_x() + bar.get_width()/2, height, str(int(height)),
                         ha="center", va="bottom", fontsize=5)
 
-            max_val = value_counts.max()
-            ax.set_ylim(0, max_val * 1.15)
+            max_val = value_counts.max() if not value_counts.empty else 0
+            ax.set_ylim(0, max_val * 1.15 if max_val > 0 else 1)
             ax.tick_params(axis="x", labelsize=5, rotation=45)
             ax.tick_params(axis="y", labelsize=5)
             plt.tight_layout(pad=0.3)
@@ -207,17 +276,14 @@ if tab == "Carregar CSV":
 
             total_valores = df_proc[col].nunique(dropna=False)
             if total_valores > 10:
-                st.info(f"Atributo `{col}` possui {total_valores} valores. Exibindo apenas os 10 mais frequentes.")
-
-    # 🔹 Caso o usuário não carregue nada agora, mas já tenha carregado antes
+                st.info(f"⚠️ Atributo `{col}` possui {total_valores} valores. Exibindo apenas os 10 mais frequentes.")
+    # Caso o usuário não carregue nada agora, mas já tenha carregado antes
     elif st.session_state.dados_original is not None:
         df = st.session_state.dados_original
         df_proc = st.session_state.dados_processados
         st.info(f"Arquivo mantido na memória: {len(df)} registros e {len(df.columns)} colunas.")
         st.markdown("<p style='font-size:14px; color:#555;'>Você pode prosseguir para a próxima aba sem recarregar o arquivo.</p>", unsafe_allow_html=True)
 
-    else:
-        st.warning("Nenhum arquivo carregado ainda.")
 # --- ABA 2: Definição de Regras ---
 elif tab == "Regras Gerais":
     
@@ -590,7 +656,7 @@ elif tab == "Regras Gerais":
 
 
 # ---------- Aba 3: Particionamento da base de dados ----------
-elif tab == "Partições":
+elif tab == "Análise Temporal":
     st.subheader("Resumo")
 
     # Verifica se o arquivo original foi carregado
@@ -834,56 +900,8 @@ elif tab == "Partições":
                     # Exibir informações de cada partição em uma linha só
                     for i, p in enumerate(particoes_registros):
                        st.write(f"Partição {i+1}: {len(p['dados'])} registros | {p['data_min'].date()} → {p['data_max'].date()}")
-                                    
-            #elif tipo_particionamento == "Por quantidade de registros":
             
-                #st.markdown("**Particionamento por quantidade de registros**")
-
-            #    tamanho_particao = numeric_text_input(
-            #        label="Quantidade de registros por partição:",
-            #        key="tamanho_particao_input",
-            #        value=min(100, len(df_original)),
-            #        min_value=10,
-            #        max_value=len(df_original),
-            #        decimals=0,
-            #        width=30
-            #    )
-
-            #    tamanho_particao = int(tamanho_particao)
-
-                # Botão para gerar as partições
-            #    if st.button("Gerar partições"):
-            #        particoes_registros = analysis.particionar_por_registros(df_original, tamanho_particao, col_data=col_data)
-        
-            #        st.success(f"Foram geradas {len(particoes_registros)} partições!")
-                    # Salva no session_state
-            #        st.session_state.particoes_temporais = particoes_registros
-                    # Exibir informações de cada partição em uma linha só
-            #        for i, p in enumerate(particoes_registros):
-            #           st.write(f"Partição {i+1}: {len(p['dados'])} registros | {p['data_min'].date()} → {p['data_max'].date()}")
-                        
-# ---------- Aba 4: Análise temporal ----------
-elif tab == "Análise Temporal":
-    st.subheader("Análise Temporal das Regras")
-
-    if "particoes_temporais" not in st.session_state:
-        st.session_state.particoes_temporais = []
-
-    # Verifica se o arquivo original foi carregado
-    if st.session_state.dados_original is None:
-        st.warning("Por favor, carregue o arquivo CSV antes de continuar.")
-    elif not st.session_state.regras:
-        st.warning("Nenhuma regra selecionada na aba 2. Selecione ao menos uma regra.")
-    elif not st.session_state.particoes_temporais:
-        st.warning("O Particionamento não foi realizado. Particione a base na aba 3.")
-    else:
-        #st.subheader("Análise Temporal das Regras")
-
-        if "particoes_temporais" not in st.session_state or not st.session_state.particoes_temporais:
-            st.warning("Por favor, particione os dados antes de gerar a análise temporal.")
-        elif not st.session_state.regras:
-            st.warning("Nenhuma regra selecionada para análise temporal.")
-        else:
+            
             if st.button("Gerar Análise Temporal"):
                 resultados = []
                 col_data = None
@@ -999,5 +1017,55 @@ elif tab == "Análise Temporal":
                                         ax.text(k, h, f"{h:.2f}", ha="center", va="bottom", fontsize=7)
 
                                     plt.tight_layout()
-                                    st.pyplot(fig, use_container_width=False)
+                                    st.pyplot(fig, use_container_width=False)                        
+            #elif tipo_particionamento == "Por quantidade de registros":
+            
+                #st.markdown("**Particionamento por quantidade de registros**")
+
+            #    tamanho_particao = numeric_text_input(
+            #        label="Quantidade de registros por partição:",
+            #        key="tamanho_particao_input",
+            #        value=min(100, len(df_original)),
+            #        min_value=10,
+            #        max_value=len(df_original),
+            #        decimals=0,
+            #        width=30
+            #    )
+
+            #    tamanho_particao = int(tamanho_particao)
+
+                # Botão para gerar as partições
+            #    if st.button("Gerar partições"):
+            #        particoes_registros = analysis.particionar_por_registros(df_original, tamanho_particao, col_data=col_data)
+        
+            #        st.success(f"Foram geradas {len(particoes_registros)} partições!")
+                    # Salva no session_state
+            #        st.session_state.particoes_temporais = particoes_registros
+                    # Exibir informações de cada partição em uma linha só
+            #        for i, p in enumerate(particoes_registros):
+            #           st.write(f"Partição {i+1}: {len(p['dados'])} registros | {p['data_min'].date()} → {p['data_max'].date()}")
+                        
+# ---------- Aba 4: Análise temporal ----------
+#elif tab == "Análise Temporal":
+#    st.subheader("Análise Temporal das Regras")
+
+#    if "particoes_temporais" not in st.session_state:
+#        st.session_state.particoes_temporais = []
+
+    # Verifica se o arquivo original foi carregado
+#    if st.session_state.dados_original is None:
+#        st.warning("Por favor, carregue o arquivo CSV antes de continuar.")
+#    elif not st.session_state.regras:
+#        st.warning("Nenhuma regra selecionada na aba 2. Selecione ao menos uma regra.")
+#    elif not st.session_state.particoes_temporais:
+#        st.warning("O Particionamento não foi realizado. Particione a base na aba 3.")
+#    else:
+        #st.subheader("Análise Temporal das Regras")
+
+#        if "particoes_temporais" not in st.session_state or not st.session_state.particoes_temporais:
+#            st.warning("Por favor, particione os dados antes de gerar a análise temporal.")
+#        elif not st.session_state.regras:
+#            st.warning("Nenhuma regra selecionada para análise temporal.")
+#        else:
+            
 
