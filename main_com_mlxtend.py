@@ -104,7 +104,7 @@ with st.sidebar:
 
     tab = option_menu(
         None,
-        ["Carregar CSV", "Regras Gerais", "Partições", "Análise Temporal"],
+        ["Carregar CSV", "Regras Gerais", "Partições"],
         icons=["file-earmark-arrow-up", "diagram-3", "calendar3", "bar-chart"],
         menu_icon="cast",
         default_index=0,
@@ -563,9 +563,10 @@ elif tab == "Regras Gerais":
                                     xaxis=dict(
                                         tickangle=45,
                                         tickfont=dict(size=10),
-                                        title=""
+                                        title="",
+                                        showgrid=False   # ❌ remove grade vertical
                                     ),
-                                    yaxis=dict(title=None, tickfont=dict(size=10)),
+                                    yaxis=dict(title=None, tickfont=dict(size=10), showgrid=False),
                                     plot_bgcolor="white",
                                     paper_bgcolor="white",
                                     showlegend=False
@@ -723,10 +724,17 @@ elif tab == "Partições":
                             st.session_state.particoes_temporais = particoes
 
                             # Mostrar resumo
-                            st.success(f"Particionamento concluído! Total de partições: {len(particoes)}")
-                            for i, p in enumerate(particoes):
-                                st.write(f"Partição {i+1}: **{p['inicio'].date()}** até **{p['fim'].date()}** — {len(p['dados'])} registros")
-            
+                            #st.success(f"Particionamento concluído! Total de partições: {len(particoes)}")
+                            #for i, p in enumerate(particoes):
+                            #    st.write(f"Partição {i+1}: **{p['inicio'].date()}** até **{p['fim'].date()}** — {len(p['dados'])} registros")
+                            
+                            
+                            # (depois de montar a lista 'particoes')
+                            st.session_state.particoes_temporais = particoes
+                            st.session_state.analise_temporal_em_andamento = False  # ✅ zera análise
+                            st.session_state.particoes_last_msg = f"Particionamento concluído! Total de partições: {len(particoes)}"
+                            # ❌ NÃO exiba resumo aqui; o bloco global cuidará disso
+
             #Opção 2: por janela fixa de tempo (escolhendo a quantidade de tempo)
             elif tipo_particionamento == "Mesmo tamanho":
                 #st.subheader("Particionamento por janelas fixas")
@@ -749,7 +757,7 @@ elif tab == "Partições":
                 if st.button("Gerar partições"):
                     particoes_fixas = analysis.particionar_por_tempo_equal_length(df_original, col_data, num_particao)
         
-                    st.success(f"Foram geradas {len(particoes_fixas)} partições!")
+                    #st.success(f"Foram geradas {len(particoes_fixas)} partições!")
                     # Salva no session_state
                     st.session_state.particoes_temporais = particoes_fixas
                     # Exibir informações de cada partição em uma linha só
@@ -765,12 +773,19 @@ elif tab == "Partições":
 
                         duracao_formatada = ", ".join(duracao_texto) or "0 dias"
 
-                        st.write(
-                            f"Partição {i+1}: {len(p['dados'])} registros | "
-                            f"{p['data_min'].date()} → {p['data_max'].date()} "
-                            f"({duracao_formatada})"
-                        )
-            
+                        #st.write(
+                        #    f"Partição {i+1}: {len(p['dados'])} registros | "
+                        #    f"{p['data_min'].date()} → {p['data_max'].date()} "
+                        #    f"({duracao_formatada})"
+                        #)
+                        
+                        
+                        # (depois de montar a lista 'particoes')
+                        #st.session_state.particoes_temporais = particoes
+                        st.session_state.analise_temporal_em_andamento = False  # ✅ zera análise
+                        st.session_state.particoes_last_msg = f"Foram geradas {len(particoes_fixas)} partições!"
+                        # ❌ NÃO exiba resumo aqui; o bloco global cuidará disso
+
             #Opção 2: por janela fixa de tempo (escolhendo a quantidade de tempo)
             #elif tipo_particionamento == "Por janelas fixas de tempo":
                 #st.subheader("Particionamento por janelas fixas")
@@ -827,13 +842,20 @@ elif tab == "Partições":
                 if st.button("Gerar partições"):
                     particoes_registros = analysis.particionar_por_quantidade_igual(df_original, qtd_particao, col_data=col_data)
                     
-                    st.success(f"Foram geradas {len(particoes_registros)} partições!")
+                    #st.success(f"Foram geradas {len(particoes_registros)} partições!")
                     # Salva no session_state
                     st.session_state.particoes_temporais = particoes_registros
                     # Exibir informações de cada partição em uma linha só
-                    for i, p in enumerate(particoes_registros):
-                       st.write(f"Partição {i+1}: {len(p['dados'])} registros | {p['data_min'].date()} → {p['data_max'].date()}")
-                                    
+                    #for i, p in enumerate(particoes_registros):
+                    #   st.write(f"Partição {i+1}: {len(p['dados'])} registros | {p['data_min'].date()} → {p['data_max'].date()}")
+                    # (depois de montar a lista 'particoes')
+                    
+                    
+                    #st.session_state.particoes_temporais = particoes
+                    st.session_state.analise_temporal_em_andamento = False  # ✅ zera análise
+                    st.session_state.particoes_last_msg = f"Foram geradas {len(particoes_registros)} partições!"
+                    # ❌ NÃO exiba resumo aqui; o bloco global cuidará disso
+                
             #elif tipo_particionamento == "Por quantidade de registros":
             
                 #st.markdown("**Particionamento por quantidade de registros**")
@@ -860,30 +882,30 @@ elif tab == "Partições":
                     # Exibir informações de cada partição em uma linha só
             #        for i, p in enumerate(particoes_registros):
             #           st.write(f"Partição {i+1}: {len(p['dados'])} registros | {p['data_min'].date()} → {p['data_max'].date()}")
-                        
-# ---------- Aba 4: Análise temporal ----------
-elif tab == "Análise Temporal":
-    st.subheader("Análise Temporal das Regras")
+            
+            
+            # === Resumo persistente das partições + botão da análise temporal ===
+            if "particoes_temporais" in st.session_state and st.session_state.particoes_temporais:
+                st.markdown("---")
+                st.success(st.session_state.get("particoes_last_msg", f"✅ {len(st.session_state.particoes_temporais)} partições geradas."))
 
-    if "particoes_temporais" not in st.session_state:
-        st.session_state.particoes_temporais = []
+                # Renderização do resumo (UM lugar só)
+                for i, p in enumerate(st.session_state.particoes_temporais):
+                    # Suporta os dois formatos que você usa (inicio/fim ou data_min/data_max)
+                    if "inicio" in p and "fim" in p:
+                        st.write(f"Partição {i+1}: **{p['inicio'].date()}** → **{p['fim'].date()}** — {len(p['dados'])} registros")
+                    else:
+                        st.write(f"Partição {i+1}: {len(p['dados'])} registros | {p['data_min'].date()} → {p['data_max'].date()}")
 
-    # Verifica se o arquivo original foi carregado
-    if st.session_state.dados_original is None:
-        st.warning("Por favor, carregue o arquivo CSV antes de continuar.")
-    elif not st.session_state.regras:
-        st.warning("Nenhuma regra selecionada na aba 2. Selecione ao menos uma regra.")
-    elif not st.session_state.particoes_temporais:
-        st.warning("O Particionamento não foi realizado. Particione a base na aba 3.")
-    else:
-        #st.subheader("Análise Temporal das Regras")
+                st.markdown("---")
+                if st.button("Gerar Análise Temporal", key="botao_analise_temporal"):
+                    st.session_state.analise_temporal_em_andamento = True
 
-        if "particoes_temporais" not in st.session_state or not st.session_state.particoes_temporais:
-            st.warning("Por favor, particione os dados antes de gerar a análise temporal.")
-        elif not st.session_state.regras:
-            st.warning("Nenhuma regra selecionada para análise temporal.")
-        else:
-            if st.button("Gerar Análise Temporal"):
+            # --- BLOCO SEPARADO: EXECUTA ANÁLISE TEMPORAL QUANDO A FLAG ESTIVER ATIVA ---
+            if st.session_state.get("analise_temporal_em_andamento", False):
+
+                st.info("🔍 Iniciando análise temporal das regras...")
+
                 resultados = []
                 col_data = None
 
@@ -894,14 +916,10 @@ elif tab == "Análise Temporal":
                         break
 
                 # === Análise Temporal das Regras ===
-                #st.subheader("Análise Temporal das Regras")
-
-                # Para cada meta-regra selecionada pelo usuário
                 for regra_user in st.session_state.regras:
                     ant_attr = regra_user["antecedente"]
                     cons_attr = regra_user["consequente"]
 
-                    # Filtra base geral para regras que correspondem à meta-regra (antecedente)
                     base_geral_filtrada = st.session_state.base_regra[
                         st.session_state.base_regra["antecedente"].str.match(f"^{ant_attr}=.+$")
                     ]
@@ -910,35 +928,26 @@ elif tab == "Análise Temporal":
                         st.warning(f"Nenhuma regra encontrada na base geral para {ant_attr} → {cons_attr}")
                         continue
 
-                    # Itera sobre cada valor distinto do antecedente
                     for ant_val, grupo_ant in base_geral_filtrada.groupby("antecedente"):
-
-                        # Para cada valor distinto do consequente dentro do antecedente
                         for cons_val, grupo_cons_geral in grupo_ant.groupby("consequente"):
-
                             st.markdown(
                                 f"<h5 style='text-align:center; color:#222; margin-top:10px; margin-bottom:4px;'>"
                                 f"{ant_val} → {cons_val}</h5>",
                                 unsafe_allow_html=True
                             )
 
-                            # Lista para armazenar medidas de cada partição
                             medidas_particoes = []
 
-                            # Percorre todas as partições temporais
                             for i, part in enumerate(st.session_state.particoes_temporais):
                                 df_part = part["dados"].copy()
                                 if df_part.empty:
                                     medidas_particoes.append({"suporte":0, "confianca":0, "lift":0})
                                     continue
 
-                                if "data" in df_part.columns:  # remove coluna de data
+                                if "data" in df_part.columns:
                                     df_part = df_part.drop(columns=["data"])
 
-                                # Prepara os dados para mineração
                                 df_part_tratado, _, _ = analysis.preparar_dados_para_mineracao_from_df(df_part)
-
-                                # Gera regras na partição
                                 df_regras_part = analysis.gerar_regras_com_mlxtend2(
                                     df_part_tratado,
                                     st.session_state.min_support,
@@ -957,46 +966,119 @@ elif tab == "Análise Temporal":
                                 if df_filtrado_part.empty:
                                     medidas_particoes.append({"suporte":0, "confianca":0, "lift":0})
                                 else:
-                                    row = df_filtrado_part.iloc[0]  # assume única correspondência
+                                    row = df_filtrado_part.iloc[0]
                                     medidas_particoes.append({
                                         "suporte": row["suporte"],
                                         "confianca": row["confianca"],
                                         "lift": row["lift"]
                                     })
 
-                            # Cria DataFrame com medidas de todas as partições
                             df_medidas = pd.DataFrame(medidas_particoes)
                             df_medidas.index = [f"Partição {i+1}" for i in range(len(medidas_particoes))]
 
-                            # Valores gerais da base geral (linha vermelha)
-                            linha_geral = grupo_cons_geral.iloc[0]  # pega a regra completa
+                            linha_geral = grupo_cons_geral.iloc[0]
                             valores_gerais = {
                                 "suporte": linha_geral["suporte"],
                                 "confianca": linha_geral["confianca"],
                                 "lift": linha_geral["lift"]
                             }
 
-                            # 3 gráficos lado a lado: suporte, confiança, lift
+                            cores_fixas = {
+                                "suporte": "skyblue",      
+                                "confianca": "skyblue",    
+                                "lift": "skyblue"          
+                            }
+                            # Monta os períodos de cada partição (ex: "01/01/2015 → 31/12/2015")
+                            periodos = []
+                            for p in st.session_state.particoes_temporais:
+                                if "inicio" in p and "fim" in p:
+                                    ini, fim = p["inicio"].date(), p["fim"].date()
+                                else:
+                                    ini, fim = p["data_min"].date(), p["data_max"].date()
+                                periodos.append(f"Partição {i+1}: {ini.strftime('%d/%m/%Y')} → {fim.strftime('%d/%m/%Y')}")
+                            df_medidas["Periodo"] = periodos
                             cols = st.columns(3)
                             for j, medida in enumerate(["suporte", "confianca", "lift"]):
                                 with cols[j]:
-                                    fig, ax = plt.subplots(figsize=(4, 3))
-                                    ax.bar(df_medidas.index, df_medidas[medida])
-                                    ax.set_title(medida.capitalize(), fontsize=10, pad=2)
-                                    ax.set_ylim(0, max(1, df_medidas[medida].max() * 1.15))
-                                    ax.tick_params(axis="x", rotation=45, labelsize=8)
-                                    ax.tick_params(axis="y", labelsize=8)
+                                    # Cria gráfico de barras com valores da medida
+                                    fig = px.bar(
+                                        df_medidas,
+                                        x=df_medidas.index,
+                                        y=medida,
+                                        text=df_medidas[medida].apply(lambda x: f"{x:.2f}"),
+                                        title=medida.capitalize(),
+                                    )
 
-                                    # linha de referência da análise geral
+                                    # Linha de referência geral (suave)
                                     y_ref = valores_gerais[medida]
-                                    ax.axhline(y=y_ref, color="red", linestyle="--")
-                                    ax.text(len(df_medidas.index)-0.3, y_ref, f"{y_ref:.2f}", color="red",
-                                            fontsize=8, va="bottom", ha="left")
+                                    fig.add_hline(
+                                        y=y_ref,
+                                        line_dash="dot",
+                                        line_color="red",
+                                        line_width=1,
+                                        opacity=0.4
+                                    )
 
-                                    # valores em cima das barras
-                                    for k, h in enumerate(df_medidas[medida]):
-                                        ax.text(k, h, f"{h:.2f}", ha="center", va="bottom", fontsize=7)
+                                    # Pega o índice da última barra para posicionar o texto logo depois
+                                    x_final = len(df_medidas.index) - 0.4  # ajusta o deslocamento horizontal
 
-                                    plt.tight_layout()
-                                    st.pyplot(fig, use_container_width=False)
+                                    # Adiciona o valor da linha ao final dela
+                                    fig.add_annotation(
+                                        x=x_final,                # 🔹 depois da última barra
+                                        y=y_ref,                  # mesma altura da linha
+                                        text=f"{y_ref:.2f}",      # valor formatado
+                                        showarrow=False,
+                                        font=dict(color="red", size=10),
+                                        xanchor="left",           # 🔹 texto “depois” da linha
+                                        yanchor="bottom",
+                                        xshift=10                 # 🔹 desloca levemente para a direita
+                                    )
 
+
+                                    # Estilo das barras
+                                    fig.update_traces(
+                                        marker_color=cores_fixas[medida],
+                                        texttemplate="%{text}",
+                                        textposition="outside",
+                                        textfont=dict(size=10),
+                                        cliponaxis=False,
+                                        hovertemplate=(
+                                            " <b>%{customdata[0]}</b><br>"  # mostra o período da partição
+                                            f"{medida.capitalize()}: <b>%{{y:.2f}}</b><extra></extra>"
+                                        ),
+                                        customdata=df_medidas[["Periodo"]]  # 🔹 adiciona a coluna extra usada no hover
+                                    )
+
+                                    # Layout e formatação geral
+                                    fig.update_layout(
+                                        height=350,
+                                        margin=dict(l=10, r=10, t=50, b=50),
+                                        title=dict(
+                                            text=medida.capitalize(),
+                                            x=0.5,  # 🔹 Centraliza título
+                                            xanchor="center",
+                                            font=dict(size=14, color="#333", family="Arial", weight="normal")
+                                        ),
+                                        xaxis=dict(
+                                            tickangle=45,
+                                            title=None,
+                                            tickfont=dict(size=10),
+                                            showgrid=False   # ❌ remove grade vertical
+                                            #zeroline=False    # ❌ remove linha zero
+                                        ),
+                                        yaxis=dict(
+                                            title=None,
+                                            tickfont=dict(size=10),
+                                            showgrid=False   # ❌ remove grade horizontal
+                                            #zeroline=False    # ❌ remove linha zero
+                                        ),
+                                        plot_bgcolor="white",
+                                        paper_bgcolor="white",
+                                        showlegend=False
+                                    )
+
+                                    st.plotly_chart(
+                                        fig,
+                                        use_container_width=True,
+                                        key=f"{ant_val}_{cons_val}_{medida}_{i}"
+                                    )
