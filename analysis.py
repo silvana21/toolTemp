@@ -7,6 +7,7 @@ import numpy as np
 import tempfile
 import subprocess
 import os
+import re
 
 def preparar_dados_para_mineracao_from_df(df_original):
     """
@@ -47,6 +48,17 @@ def preparar_para_apriori(df):
     df_oht = pd.get_dummies(df, prefix_sep='=')
     return df_oht
 
+# --- trata antecedentes compostos ---
+def parse_antecedentes(ant_str):
+    """Divide uma string de antecedente composto (ex: 'first_pull, lifetime') em lista."""
+    return [a.strip() for a in str(ant_str).split(",") if a.strip()]
+
+# --- trata antecedente composto ("a, b, c") ---
+def _parse_antecedentes(ant):
+    # ant pode vir como "a, b" (string) ou lista (se já vindo do state)
+    if isinstance(ant, list):
+        return [s.strip() for s in ant if s and str(s).strip()]
+    return [s.strip() for s in str(ant).split(",") if s and s.strip()]
 
 def gerar_regras_com_r(df, sup=0.01, conf=0.01, script_path="gerar_regras.R",
                        lhs_attr=None, rhs_attr=None):
@@ -236,8 +248,6 @@ def filtrar_regras_por_item(df_regras, antecedentes=None, consequentes=None):
         * Se len>=2: aceita qualquer subconjunto não-vazio do conjunto escolhido, sem extras.
     Retorna um DataFrame filtrado.
     """
-    import pandas as pd
-
     def to_set(s):
         if isinstance(s, set):
             return s
@@ -273,7 +283,7 @@ def filtrar_regras_por_item(df_regras, antecedentes=None, consequentes=None):
     mask = df_regras.apply(ok, axis=1)
     return df_regras[mask].copy()
 
-def filtrar_regras_por_atributo(df_regras, regras_usuario):
+def filtrar_regras_por_atributo2(df_regras, regras_usuario):
     """
     Filtra regras do DataFrame de acordo com as regras completas selecionadas pelo usuário.
     Cada regra do usuário é do tipo: {'antecedente': 'atributo', 'consequente': 'atributo'}.
@@ -303,6 +313,78 @@ def filtrar_regras_por_atributo(df_regras, regras_usuario):
         df_filtrado = pd.DataFrame(columns=df_regras.columns)
 
     return df_filtrado
+
+def _extract_attr_set(side: str) -> set:
+    """
+    Extrai o conjunto de nomes de atributos de uma string do lado da regra,
+    ex.: "first_pull=True,lifetime=long" -> {"first_pull","lifetime"}.
+    Ignora espaços e respeita caixa-insensível.
+    """
+    if side is None or pd.isna(side):
+        return set()
+    # procura padrões tipo atributo=valor
+    attrs = re.findall(r'([A-Za-z0-9_]+)\s*=', str(side))
+    return set(a.strip().lower() for a in attrs)
+
+def _parse_meta_antecedente(meta_ant: str) -> set:
+    """
+    Converte a meta-seleção do usuário em conjunto de atributos
+    ex.: "first_pull, lifetime" -> {"first_pull","lifetime"}.
+    """
+    if meta_ant is None:
+        return set()
+    parts = [p.strip().lower() for p in str(meta_ant).split(",") if p and p.strip()]
+    return set(parts)
+
+def filtrar_regras_por_atributo(df_regras: pd.DataFrame, lista_meta_regras):
+    """
+    Filtra df_regras para conter SOMENTE regras que correspondem
+    EXATAMENTE à composição de atributos escolhida nas meta-regras.
+    - Antecedente: conjunto de atributos EXACTO.
+    - Consequente: conjunto EXACTO com 1 atributo (o escolhido).
+    Funciona para meta-regras simples e compostas.
+    """
+    if df_regras is None or df_regras.empty:
+        return pd.DataFrame()
+
+    df = df_regras.copy()
+
+    # Extrai conjuntos de atributos de cada lado, uma vez só
+    if "antecedente_attrs" not in df.columns or "consequente_attrs" not in df.columns:
+        df["antecedente_attrs"] = df["antecedente"].apply(_extract_attr_set)
+        df["consequente_attrs"] = df["consequente"].apply(_extract_attr_set)
+
+    blocos = []
+    for meta in lista_meta_regras:
+        meta_ant = meta["antecedente"]
+        meta_cons = meta["consequente"]
+
+        ant_set = _parse_meta_antecedente(meta_ant)            # ex.: {"first_pull"} ou {"first_pull","lifetime"}
+        cons_set = {str(meta_cons).strip().lower()}            # ex.: {"merged"}
+
+        tam_esperado = len(ant_set)
+        mask = (
+            (df["antecedente_attrs"].apply(lambda s: s == ant_set or (len(ant_set) == 1 and s == ant_set)))
+            & (df["consequente_attrs"].apply(lambda s: s == cons_set))
+            & (df["antecedente_attrs"].apply(lambda s: len(s) == tam_esperado))
+        )
+
+        subset = df[mask].copy()
+        if not subset.empty:
+            subset["meta_regra"] = f"{meta_ant} → {meta_cons}"
+            blocos.append(subset)
+
+    if not blocos:
+        return pd.DataFrame()
+
+    out = pd.concat(blocos, ignore_index=True)
+
+    # Remove duplicatas só com base em colunas textuais/numéricas (sem sets)
+    dup_cols = [c for c in out.columns if out[c].map(lambda x: not isinstance(x, set)).all()]
+    out = out.drop_duplicates(subset=dup_cols)
+
+    # Opcional: remover colunas auxiliares antes de devolver
+    return out.drop(columns=["antecedente_attrs", "consequente_attrs"], errors="ignore")
 
 
 

@@ -175,7 +175,7 @@ if tab == "Carregar CSV":
         else:
             st.info("Nenhum atributo de data/numérico foi removido.")
 
-        st.subheader("Resumo dos Atributos (valores e frequência)")
+        
 
         # --- guarda ordens personalizadas por atributo ---
         if "ordem_valores" not in st.session_state:
@@ -194,37 +194,41 @@ if tab == "Carregar CSV":
         for col, value_counts in st.session_state["resumo_colunas"].items():
             lista_valores = [str(v) for v in value_counts.index.tolist()]
 
-            if usa_dragdrop:
-                st.caption(f"Defina a ordem de exibição para **{col}** (arraste para reorganizar)")
+            # Cria três colunas e usa só a central (para não ocupar toda a tela)
+            col1, col2, col3 = st.columns([0.3, 0.2, 0.2])
 
-                # 🔹 Recupera a ordem salva anteriormente, se existir
-                ordem_salva = st.session_state["ordem_valores"].get(col, lista_valores)
+            with col1:  # tudo acontece dentro da primeira coluna
+                if usa_dragdrop:
+                    st.caption(f"Defina a ordem de exibição para **{col}** (arraste para reorganizar)")
 
-                # 🔹 Garante que os itens que sumiram (novos valores, etc.) ainda apareçam
-                for item in lista_valores:
-                    if item not in ordem_salva:
-                        ordem_salva.append(item)
+                    # 🔹 Recupera a ordem salva anteriormente, se existir
+                    ordem_salva = st.session_state["ordem_valores"].get(col, lista_valores)
 
-                # 🔹 Mostra o componente já com a ordem salva
-                ordem_escolhida = sort_items(
-                    items=ordem_salva,
-                    direction="vertical",
-                    key=f"sort_{col}"
-                )
+                    # 🔹 Garante que os itens que sumiram (novos valores, etc.) ainda apareçam
+                    for item in lista_valores:
+                        if item not in ordem_salva:
+                            ordem_salva.append(item)
 
-                # 🔹 Se o usuário não interagiu (ordem_escolhida vazia), mantém a salva
-                if not ordem_escolhida:
-                    ordem_escolhida = ordem_salva
-            else:
-                st.caption(f"Defina a ordem de exibição para **{col}** (selecione na ordem desejada)")
-                ordem_escolhida = st.multiselect(
-                    label=f"Ordem de {col}",
-                    options=lista_valores,
-                    default=st.session_state["ordem_valores"].get(col, lista_valores),
-                    key=f"ms_{col}"
-                )
-                if not ordem_escolhida:
-                    ordem_escolhida = lista_valores
+                    # 🔹 Mostra o componente já com a ordem salva
+                    ordem_escolhida = sort_items(
+                        items=ordem_salva,
+                        direction="vertical",
+                        key=f"sort_{col}"
+                    )
+
+                    # 🔹 Se o usuário não interagiu (ordem_escolhida vazia), mantém a salva
+                    if not ordem_escolhida:
+                        ordem_escolhida = ordem_salva
+                else:
+                    st.caption(f"Defina a ordem de exibição para **{col}** (selecione na ordem desejada)")
+                    ordem_escolhida = st.multiselect(
+                        label=f"Ordem de {col}",
+                        options=lista_valores,
+                        default=st.session_state["ordem_valores"].get(col, lista_valores),
+                        key=f"ms_{col}"
+                    )
+                    if not ordem_escolhida:
+                        ordem_escolhida = lista_valores
 
             # Salva de forma persistente (mantém entre abas)
             if "ordem_valores" not in st.session_state:
@@ -237,9 +241,9 @@ if tab == "Carregar CSV":
         # ====================================================
         # 2️⃣ SEGUNDO LOOP → gera os gráficos com base nas ordens
         # ====================================================
-        st.markdown("### Visualização dos atributos")
+        st.subheader("Resumo dos Atributos (valores e frequência)")
 
-        cols = st.columns(3)
+        cols = st.columns(2)
         col_index = 0
 
         for col, value_counts in st.session_state["resumo_colunas"].items():
@@ -249,46 +253,76 @@ if tab == "Carregar CSV":
             # aplica ordem escolhida
             value_counts = value_counts.reindex(ordem_escolhida)
 
-            fig, ax = plt.subplots(figsize=(2, 1.5))
-            bars = ax.bar(value_counts.index.astype(str), value_counts.values, color="skyblue")
+            df_temp = value_counts.reset_index()
+            df_temp.columns = ["valor", "frequencia"]
+            df_temp["atributo"] = col  # adiciona o nome do atributo para o hover
 
-            for bar in bars:
-                h = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width()/2, h, str(h),
-                        ha="center", va="bottom", fontsize=5)
+            # ===== Gráfico de barras horizontais =====
+            fig = px.bar(
+                df_temp,
+                y="valor",
+                x="frequencia",
+                text="frequencia",
+                color_discrete_sequence=["#4A90E2"],  # tom padrão
+                height=220,
+                orientation="h"  # 👈 barra horizontal
+            )
 
-            max_val = value_counts.max() if len(value_counts) else 0
-            ax.set_ylim(0, max_val * 1.15 if max_val > 0 else 1)
-            ax.tick_params(axis="x", labelsize=5, rotation=45)
-            ax.tick_params(axis="y", labelsize=5)
-            plt.tight_layout(pad=0.3)
+            # ===== Hover customizado =====
+            fig.update_traces(
+                texttemplate="%{text}",
+                textposition="outside",
+                cliponaxis=False,
+                customdata=df_temp[["atributo"]],
+                hovertemplate=(
+                    "Atributo: %{customdata[0]}<br>"
+                    + "Valor: %{y}<br>"
+                    + "Quantidade: %{x}<extra></extra>"
+                ),
+            )
 
+            # ===== Layout =====
+            fig.update_layout(
+                title_text="",
+                xaxis_title="",
+                yaxis_title="",
+                margin=dict(l=80, r=20, t=10, b=10),
+                showlegend=False,
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+            )
+            fig.update_yaxes(tickfont=dict(size=11), automargin=True)
+            fig.update_xaxes(showgrid=False, tickfont=dict(size=11))
+
+            # ===== Exibição =====
             with cols[col_index]:
                 st.markdown(
                     f"<p style='text-align: center; font-weight: bold;'>{col}</p>",
                     unsafe_allow_html=True
                 )
-                st.pyplot(fig, use_container_width=False)
-
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            
             col_index += 1
-            if col_index == 3:
+            if col_index == 2:
                 st.markdown(
                     "<div style='height:1px; background-color:#e0e0e0; margin:5px 0;'></div>",
                     unsafe_allow_html=True
                 )
-                cols = st.columns(3)
+                cols = st.columns(2)
                 col_index = 0
 
             total_valores = df_proc[col].nunique(dropna=False)
             if total_valores > 10:
                 st.info(f"Atributo `{col}` possui {total_valores} valores. Exibindo apenas os 10 mais frequentes.")
+
     # 3) Caso não tenha nada ainda
     else:
         st.warning("Nenhum arquivo CSV foi carregado ainda.")
 
 # --- ABA 2: Definição de Regras ---
 elif tab == "Regras Gerais":
-    
+    if "__rerun_trigger__" in st.session_state:
+        del st.session_state["__rerun_trigger__"]
     st.subheader("Configuração do algoritmo")
     
     # Garantir que os dados foram carregados e processados
@@ -322,7 +356,9 @@ elif tab == "Regras Gerais":
         st.session_state.min_confidence = min_confidence
         colunas = list(st.session_state.dados_processados.columns)
 
-        # Inicializa estado específico da aba
+        # ===============================
+        # Inicialização de variáveis
+        # ===============================
         if "regras" not in st.session_state:
             st.session_state.regras = []
         if "antecedente_habilitado" not in st.session_state:
@@ -330,127 +366,145 @@ elif tab == "Regras Gerais":
         if "consequente_habilitado" not in st.session_state:
             st.session_state.consequente_habilitado = True
         if "antecedente_select" not in st.session_state:
-            st.session_state.antecedente_select = ""
+            st.session_state.antecedente_select = []
         if "consequente_select" not in st.session_state:
             st.session_state.consequente_select = ""
+        if "reset_flag" not in st.session_state:
+            st.session_state.reset_flag = False
 
+        # ===============================
+        # Reset seguro após rerun
+        # ===============================
+        if st.session_state.reset_flag:
+            st.session_state.antecedente_select = []
+            st.session_state.consequente_select = ""
+            st.session_state.reset_flag = False
+
+        # ===============================
+        # Interface de meta-regras
+        # ===============================
         st.subheader("Definição das meta regras")
-        
-        # Cria 3 colunas: esquerda, central e direita
-        col_e, col_cent, col_d = st.columns([2, 1, 1])
 
+        col_e, col_cent, col_d = st.columns([2, 1, 1])
         with col_e:
-            # Inputs lado a lado dentro da coluna central
-            col_1, col_2 = st.columns([1,1])
-        with col_1:
-            
-            # Seleção de antecedente
-            antecedente = st.selectbox(
-                "Selecione o Antecedente",
-                options=[""] + colunas,
-                index=0 if "_reset_index" in st.session_state else ([""] + colunas).index(st.session_state.antecedente_select)
-                if st.session_state.antecedente_select in ([""] + colunas)
-                else 0,
-                key="antecedente_select",
-                disabled=not st.session_state.antecedente_habilitado
+            col_1, col_2 = st.columns([1, 1])
+
+        colunas_lista = colunas if "colunas" in locals() else st.session_state.dados_processados.columns.tolist()
+
+        # ==========================
+        # ANTECEDENTE(S)
+        # ==========================
+
+        # inicialização segura no estado
+        if "antecedente_select" not in st.session_state or st.session_state.antecedente_select is None:
+            st.session_state.antecedente_select = []
+
+        # converte string para lista, se necessário
+        if isinstance(st.session_state.antecedente_select, str):
+            st.session_state.antecedente_select = (
+                [] if not st.session_state.antecedente_select.strip()
+                else [st.session_state.antecedente_select.strip()]
             )
 
-        # Define as opções de consequente
-        if "colunas" in locals():
-            colunas_lista = colunas
-        else:
-            colunas_lista = st.session_state.dados_processados.columns.tolist()
+        with col_1:
+            # a chave e o valor agora são controlados **somente pelo estado**
+            antecedentes = st.multiselect(
+                "Selecione o(s) Antecedente(s)",
+                options=colunas_lista,
+                key="antecedente_select",
+                disabled=not st.session_state.antecedente_habilitado,
+                help="Você pode selecionar mais de um atributo para criar uma meta-regra composta."
+            )
 
-        if antecedente:
-            opcoes_consequente = [c for c in colunas_lista if c != antecedente]
-        else:
-            opcoes_consequente = colunas_lista
-
+        # --- CONSEQUENTE (remove os escolhidos como antecedente) ---
+        opcoes_consequente = [c for c in colunas_lista if c not in antecedentes]
         with col_2:
-            # Seleção de consequente
             consequente = st.selectbox(
                 "Selecione o Consequente",
                 options=[""] + opcoes_consequente,
-                index=0 if "_reset_index" in st.session_state else ([""] + opcoes_consequente).index(st.session_state.consequente_select)
-                if st.session_state.consequente_select in ([""] + opcoes_consequente)
-                else 0,
+                index=0 if st.session_state.consequente_select not in opcoes_consequente
+                else opcoes_consequente.index(st.session_state.consequente_select) + 1,
                 key="consequente_select",
                 disabled=not st.session_state.consequente_habilitado
             )
 
-        # Limpa flag de reset
-        if "_reset_index" in st.session_state:
-            del st.session_state._reset_index
-
-        # Botão para adicionar regra
+        # --- Botão para adicionar meta-regra ---
         if st.button("Adicionar meta regra"):
-            if antecedente and consequente:
-                # Adiciona como dicionário
-                regra = {"antecedente": antecedente, "consequente": consequente}
+            if antecedentes and consequente:
+                regra = {"antecedente": ", ".join(antecedentes), "consequente": consequente}
                 if regra not in st.session_state.regras:
                     st.session_state.regras.append(regra)
-                st.session_state._reset_index = True
+                st.session_state.reset_flag = True
+                st.rerun()
 
-        # Criar lista temporária para reconstruir sem o item removido
+        # ===============================
+        # Exibe regras adicionadas
+        # ===============================
         novas_regras = []
-
-        # Mostrar regras já adicionadas com opção de remover
         if st.session_state.regras:
             st.markdown(
                 "<p style='font-size:18px; font-weight:bold;'>Meta regras selecionadas</p>",
                 unsafe_allow_html=True
             )
-            
             for i, regra in enumerate(st.session_state.regras):
                 texto = f"{regra['antecedente']} → {regra['consequente']}"
-                col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+                col1, col2 = st.columns([4, 1])
                 remover = False
                 with col1:
                     st.write(texto)
                 with col2:
                     if st.button("❌", key=f"remove_{i}"):
                         remover = True
-                
-                # Só mantém a regra se não clicou no X
                 if not remover:
                     novas_regras.append(regra)
 
-        # Atualiza a lista de regras no session_state
         st.session_state.regras = novas_regras
-        
+
+        # ===============================
+        # Início da contagem total
+        # ===============================
+        inicio_total = time.time()
+
         # =============================
         # Botão para gerar regras filtradas
         # =============================
         if st.button("Gerar regras"):
-            # reseta flag para evitar replotagem dupla
             st.session_state.mostrar_regras = False
             progress = st.progress(0)
-
+            
             st.info("Gerando regras de associação para cada meta-regra...")
+            inicio_regras = time.time()
             progress.progress(25)
 
             todas_regras = []
 
-            # 🔹 Gera as regras de forma independente para cada meta-regra
             for meta in st.session_state.regras:
                 antecedente = meta["antecedente"]
                 consequente = meta["consequente"]
 
-                # Subconjunto apenas com as colunas de interesse
-                df_sub = st.session_state.dados_processados[[antecedente, consequente]].copy()
+                ant_cols = analysis._parse_antecedentes(antecedente)
 
-                # Gera regras com mlxtend
+                missing = [c for c in ant_cols + [consequente] 
+                        if c not in st.session_state.dados_processados.columns]
+                if missing:
+                    st.error(f"A(s) coluna(s) {missing} não existem no dataset.")
+                    st.stop()
+
+                df_sub = st.session_state.dados_processados[ant_cols + [consequente]].copy()
+
                 df_temp = analysis.gerar_regras_com_mlxtend(
                     df_sub,
                     sup=st.session_state.min_support,
                     conf=st.session_state.min_confidence
                 )
 
-                # Armazena com metadados
                 if not df_temp.empty:
                     df_temp["lhs_attr"] = antecedente
                     df_temp["rhs_attr"] = consequente
                     todas_regras.append(df_temp)
+
+            fim_regras = time.time()
+            tempo_regras = fim_regras - inicio_regras
 
             # Junta todas as regras geradas
             if todas_regras:
@@ -464,33 +518,47 @@ elif tab == "Regras Gerais":
 
             progress.progress(50)
 
-            # Etapa 2: filtragem (só salva no estado)
+            # =============================
+            # Etapa 2: Filtragem
+            # =============================
+            st.info("🔎 Filtrando regras conforme meta-regras...")
+            inicio_filtro = time.time()
+
             base_regra = analysis.filtrar_regras_por_atributo(
                 df_regras, st.session_state.regras
             )
-            st.session_state.base_regra = base_regra
-            progress.progress(100)
+            
+            fim_filtro = time.time()
+            tempo_filtro = fim_filtro - inicio_filtro
 
-            # ✅ Marca para renderizar fora do botão
+            st.session_state.base_regra = base_regra
+            st.session_state.df_regras = df_regras
             st.session_state.mostrar_regras = True
 
-            # ✅ Força rerun para que o bloco de gráficos abaixo execute sozinho
-            try:
-                st.rerun()  # Streamlit >= 1.32
-            except Exception:
-                st.experimental_rerun()  # compatibilidade com versões anteriores
+            progress.progress(100)
+            st.session_state["tempos_execucao"] = {
+                "tempo_regras": tempo_regras,
+                "tempo_filtro": tempo_filtro,
+            }
 
+            st.session_state["__rerun_trigger__"] = True  
+            if hasattr(st, "rerun"):
+                st.rerun()
+            else:
+                st.experimental_rerun()
 
         # =============================
-        # Reexibe gráficos salvos (único bloco que plota)
+        # Reexibe gráficos salvos
         # =============================
+        
+        inicio_graficos = time.time()
+
         if (
             st.session_state.get("mostrar_regras", False)
             and "df_regras" in st.session_state
             and st.session_state.df_regras is not None
             and not st.session_state.df_regras.empty
         ):
-
             df_regras = st.session_state.df_regras
             base_regra = st.session_state.base_regra
 
@@ -500,27 +568,24 @@ elif tab == "Regras Gerais":
                     unsafe_allow_html=True
                 )
 
-                df_plot = base_regra.rename(columns={
-                    "Suporte": "suporte",
-                    "Confianca": "confianca",
-                    "Lift": "lift",
-                    "Antecedente": "antecedente",
-                    "Consequente": "consequente",
-                })
-
                 for regra_user in st.session_state.regras:
                     atributo_antecedente = regra_user["antecedente"]
                     atributo_consequente = regra_user["consequente"]
+                    meta_tag = f"{atributo_antecedente} → {atributo_consequente}"
 
                     st.markdown(
-                        f"<p style='font-size:18px; text-align: center;'>Meta regra: {atributo_antecedente} → {atributo_consequente}</p>",
+                        f"<p style='font-size:18px; text-align: center;'>Meta regra: {meta_tag}</p>",
                         unsafe_allow_html=True
                     )
 
-                    base_regra_filtrada = base_regra[
-                        (base_regra["antecedente"].str.contains(atributo_antecedente, case=False, na=False)) &
-                        (base_regra["consequente"].str.contains(atributo_consequente, case=False, na=False))
-                    ]
+                    if "meta_regra" in base_regra.columns:
+                        base_regra_filtrada = base_regra[base_regra["meta_regra"] == meta_tag].copy()
+                    else:
+                        base_regra_filtrada = pd.DataFrame()
+
+                    base_regra_filtrada = base_regra_filtrada.drop_duplicates(
+                        subset=["antecedente", "consequente", "suporte", "confianca", "lift"]
+                    )
 
                     for cons_val, grupo_cons in base_regra_filtrada.groupby("consequente"):
                         st.markdown(
@@ -529,12 +594,26 @@ elif tab == "Regras Gerais":
                             unsafe_allow_html=True
                         )
 
+                        grupo_cons = grupo_cons.copy()
+
+                        # === aplica ordem salva na aba 1, se existir === 
+                        if atributo_antecedente in st.session_state.get("ordem_valores", {}): 
+                            ordem = st.session_state["ordem_valores"][atributo_antecedente] # detecta formato (com ou sem "atributo=") 
+                            exemplo = str(grupo_cons["antecedente"].iloc[0]) 
+                            if "=" in exemplo and exemplo.split("=")[0].strip().lower() == atributo_antecedente.lower(): 
+                                ordem_labels = [f"{atributo_antecedente}={v}" for v in ordem] 
+                            else: ordem_labels = ordem 
+                            
+                            grupo_cons["antecedente"] = pd.Categorical( 
+                                grupo_cons["antecedente"].astype(str), 
+                                categories=ordem_labels, ordered=True 
+                            ) 
+                            grupo_cons = grupo_cons.sort_values("antecedente") 
+                        else: 
+                            ordem_labels = None
+
                         cols = st.columns(3)
-                        cores_fixas = {
-                            "suporte": "skyblue",
-                            "confianca": "skyblue",
-                            "lift": "skyblue"
-                        }
+                        cores_fixas = {"suporte": "skyblue", "confianca": "skyblue", "lift": "skyblue"}
 
                         for i, medida in enumerate(["suporte", "confianca", "lift"]):
                             with cols[i]:
@@ -544,41 +623,52 @@ elif tab == "Regras Gerais":
                                     y=medida,
                                     text=grupo_cons[medida].apply(lambda x: f"{x:.2f}"),
                                     title=medida.capitalize(),
+                                    category_orders={"antecedente": ordem_labels} if ordem_labels else None
                                 )
-                                fig.update_traces(
-                                    marker_color=cores_fixas[medida],
-                                    marker_line_color="rgba(0,0,0,0.2)",
-                                    marker_line_width=1,
-                                    width=0.5,
-                                    texttemplate="%{text}",
-                                    textposition="outside",
-                                    textfont=dict(size=10),
-                                    cliponaxis=False
+                                fig.update_traces( 
+                                    marker_color=cores_fixas[medida], 
+                                    marker_line_color="rgba(0,0,0,0.2)", 
+                                    marker_line_width=1, 
+                                    width=0.5, 
+                                    texttemplate="%{text}", 
+                                    textposition="outside", 
+                                    textfont=dict(size=10), 
+                                    cliponaxis=False 
                                 )
                                 fig.update_layout(
                                     height=300,
                                     margin=dict(l=10, r=10, t=40, b=40),
                                     title=dict(text=medida.capitalize(), x=0.5, xanchor='center'),
-                                    title_font=dict(size=14, color="#222", family="Arial", weight="normal"),
-                                    xaxis=dict(
-                                        tickangle=45,
-                                        tickfont=dict(size=10),
-                                        title="",
-                                        showgrid=False   # ❌ remove grade vertical
-                                    ),
-                                    yaxis=dict(title=None, tickfont=dict(size=10), showgrid=False),
-                                    plot_bgcolor="white",
-                                    paper_bgcolor="white",
+                                    title_font=dict(size=14, color="#222", family="Arial", weight="normal"), 
+                                    xaxis=dict(tickangle=45, tickfont=dict(size=10), title="", showgrid=False), 
+                                    yaxis=dict(title=None, tickfont=dict(size=10), showgrid=False), 
+                                    plot_bgcolor="white", 
+                                    paper_bgcolor="white", 
                                     showlegend=False
                                 )
-                                # ✅ chave única: adiciona hash do grupo
-                                unique_key = f"{atributo_antecedente}_{atributo_consequente}_{cons_val}_{medida}_{hash(cons_val)}"
-                                st.plotly_chart(fig, use_container_width=True, key=unique_key)
+                                st.plotly_chart(fig, use_container_width=True)
 
-                st.markdown("<div style='height:1px; background:#e6e6e6; margin:6px 0;'></div>", unsafe_allow_html=True)
+                fim_graficos = time.time()
+                tempo_graficos = fim_graficos - inicio_graficos
+                fim_total = time.time()
+                tempo_total = fim_total - inicio_total
+
+                # =============================
+                # Exibe os tempos no final
+                # =============================
+                tempos = st.session_state.get("tempos_execucao", {})
+                tempo_regras = tempos.get("tempo_regras", 0)
+                tempo_filtro = tempos.get("tempo_filtro", 0)
+
+                st.markdown("---")
+                #st.info(f"⚙️ Tempo para gerar regras: **{tempo_regras:.2f} s**")
+                #st.info(f"🔎 Tempo para filtrar regras: **{tempo_filtro:.2f} s**")
+                #st.info(f"📊 Tempo para gerar gráficos: **{tempo_graficos:.2f} s**")
+                #st.success(f"⏱️ Tempo total: **{tempo_total:.2f} s**")
 
     else:
         st.warning("Por favor, carregue o arquivo CSV antes de continuar.")
+
 
 # ---------- Aba 3: Particionamento da base de dados ----------
 elif tab == "Partições":
