@@ -40,7 +40,7 @@ _init_state()
 if "ordem_valores" not in st.session_state:
     st.session_state["ordem_valores"] = {}
 
-def _sanitize_input(key, min_value=None, max_value=None, decimals=1):
+def _sanitize_input(key, min_value=None, max_value=None, decimals=4):
     """Callback: limpa st.session_state[key] mantendo só números e 1 ponto decimal."""
     s = st.session_state.get(key, "")
     s = s.strip().replace(",", ".")
@@ -68,7 +68,7 @@ def _sanitize_input(key, min_value=None, max_value=None, decimals=1):
     fmt = f"{{:.{decimals}f}}".format(num)
     st.session_state[key] = fmt
 
-def numeric_text_input(label, key, value=0.0, min_value=None, max_value=None, decimals=1, width=90):
+def numeric_text_input(label, key, value=0.0, min_value=None, max_value=None, decimals=4, width=90):
     """
     Text input que aceita apenas números (limpa via on_change).
     Retorna float (valor default se campo vazio ou inválido).
@@ -650,21 +650,18 @@ elif tab == "Regras Gerais":
 
                 fim_graficos = time.time()
                 tempo_graficos = fim_graficos - inicio_graficos
-                fim_total = time.time()
-                tempo_total = fim_total - inicio_total
 
-                # =============================
-                # Exibe os tempos no final
-                # =============================
                 tempos = st.session_state.get("tempos_execucao", {})
                 tempo_regras = tempos.get("tempo_regras", 0)
                 tempo_filtro = tempos.get("tempo_filtro", 0)
 
+                tempo_total = tempo_regras + tempo_filtro + tempo_graficos  # soma explícita
+
                 st.markdown("---")
-                #st.info(f"⚙️ Tempo para gerar regras: **{tempo_regras:.2f} s**")
-                #st.info(f"🔎 Tempo para filtrar regras: **{tempo_filtro:.2f} s**")
-                #st.info(f"📊 Tempo para gerar gráficos: **{tempo_graficos:.2f} s**")
-                #st.success(f"⏱️ Tempo total: **{tempo_total:.2f} s**")
+                st.info(f"⚙️ Tempo para gerar regras: **{tempo_regras:.2f} s**")
+                st.info(f"🔎 Tempo para filtrar regras: **{tempo_filtro:.2f} s**")
+                st.info(f"📊 Tempo para gerar gráficos: **{tempo_graficos:.2f} s**")
+                st.success(f"⏱️ Tempo total: **{tempo_total:.2f} s**")
 
     else:
         st.warning("Por favor, carregue o arquivo CSV antes de continuar.")

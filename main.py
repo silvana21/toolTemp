@@ -38,7 +38,7 @@ def _init_state():
 
 _init_state()
 
-def _sanitize_input(key, min_value=None, max_value=None, decimals=1):
+def _sanitize_input(key, min_value=None, max_value=None, decimals=4):
     """Callback: limpa st.session_state[key] mantendo só números e 1 ponto decimal."""
     s = st.session_state.get(key, "")
     s = s.strip().replace(",", ".")
@@ -66,7 +66,7 @@ def _sanitize_input(key, min_value=None, max_value=None, decimals=1):
     fmt = f"{{:.{decimals}f}}".format(num)
     st.session_state[key] = fmt
 
-def numeric_text_input(label, key, value=0.0, min_value=None, max_value=None, decimals=1, width=90):
+def numeric_text_input(label, key, value=0.0, min_value=None, max_value=None, decimals=4, width=90):
     """
     Text input que aceita apenas números (limpa via on_change).
     Retorna float (valor default se campo vazio ou inválido).
@@ -562,14 +562,15 @@ elif tab == "Regras Gerais":
             progress.progress(100)
             st.success("✅ Regras geradas e gráficos exibidos com sucesso!")
 
-            fim_total = time.time()
-            tempo_total = fim_total - inicio_total
+            # Calcula o tempo total como a soma das etapas
+            tempo_total = tempo_regras + tempo_graficos
 
             # === EXIBE OS TEMPOS DE CADA ETAPA ===
             st.markdown("---")
             st.info(f"⚙️ Tempo para gerar regras: **{tempo_regras:.2f} segundos**")
             st.info(f"📊 Tempo para gerar gráficos: **{tempo_graficos:.2f} segundos**")
             st.success(f"⏱️ Tempo total: **{tempo_total:.2f} segundos**")
+
 
         # 🔹 Se já houver regras salvas na sessão, reexibir automaticamente os gráficos
         elif "df_regras" in st.session_state and st.session_state.df_regras is not None and not st.session_state.df_regras.empty:
