@@ -10,6 +10,7 @@ import re
 from dateutil.relativedelta import relativedelta
 import time
 import plotly.express as px
+import copy
 
 st.set_page_config(page_title="Análise Temporal de Regras de Associação", layout="wide")
 
@@ -100,11 +101,11 @@ def numeric_text_input(label, key, value=0.0, min_value=None, max_value=None, de
 # ----------------- Abas -----------------
 # --- MENU LATERAL ---
 with st.sidebar:
-    st.markdown("### 🧭 Navegação")
+    st.markdown("### Navegação")
 
     tab = option_menu(
         None,
-        ["Carregar CSV", "Regras Gerais", "Partições"],
+        ["Carregar CSV", "Regras Gerais", "Análise Temporal", "Histórico de Análises"],
         icons=["file-earmark-arrow-up", "diagram-3", "calendar3", "bar-chart"],
         menu_icon="cast",
         default_index=0,
@@ -658,19 +659,27 @@ elif tab == "Regras Gerais":
                 tempo_total = tempo_regras + tempo_filtro + tempo_graficos  # soma explícita
 
                 st.markdown("---")
-                st.info(f"⚙️ Tempo para gerar regras: **{tempo_regras:.2f} s**")
-                st.info(f"🔎 Tempo para filtrar regras: **{tempo_filtro:.2f} s**")
-                st.info(f"📊 Tempo para gerar gráficos: **{tempo_graficos:.2f} s**")
-                st.success(f"⏱️ Tempo total: **{tempo_total:.2f} s**")
+                st.info(f"Tempo para gerar regras: **{tempo_regras:.2f} s**")
+                st.info(f"Tempo para filtrar regras: **{tempo_filtro:.2f} s**")
+                st.info(f"Tempo para gerar gráficos: **{tempo_graficos:.2f} s**")
+                st.success(f"Tempo total: **{tempo_total:.2f} s**")
 
     else:
         st.warning("Por favor, carregue o arquivo CSV antes de continuar.")
 
 
 # ---------- Aba 3: Particionamento da base de dados ----------
-elif tab == "Partições":
+elif tab == "Análise Temporal":
     st.subheader("Resumo")
+    
 
+    # ==============================================
+    # Inicializa estrutura de abas de análises, se necessário
+    # ==============================================
+    if "analises_temporais" not in st.session_state:
+        st.session_state.analises_temporais = []
+    
+    
     # Verifica se o arquivo original foi carregado
     if st.session_state.dados_original is None:
         st.warning("Por favor, carregue o arquivo CSV antes de continuar.")
@@ -715,281 +724,240 @@ elif tab == "Partições":
 
             st.markdown("---")
             
-            st.subheader("Tipo de particionamento")
+            #st.subheader("Tipo de particionamento")
             #Novo seletor de tipo de particionamento
-            tipo_particionamento = st.radio(
-                "",
-                ("Marcos temporais", "Mesmo tamanho", "Mesma quantidade de registros"),
-                horizontal=True
-            )
+            #tipo_particionamento = st.radio(
+            #    "",
+            #    ("Marcos temporais", "Mesmo tamanho", "Mesma quantidade de registros"),
+            #    horizontal=True
+            #)
+            # 🔹 Guarda o tipo de particionamento escolhido para reutilizar depois
+            #st.session_state.tipo_particionamento = tipo_particionamento
 
             #st.markdown("---")
-            #Opção 1: por marcos temporais
-            if tipo_particionamento == "Marcos temporais":
-                #st.subheader("Defina os marcos temporais")
+            # ======================================
+            # SEÇÃO DE PARTICIONAMENTO REESTILIZADA
+            # ======================================
 
-                # Inicializa lista de marcos no session_state
-                if "marcos_temporais" not in st.session_state:
-                    st.session_state.marcos_temporais = []
+            st.markdown("### Particionamento da Base de Dados")
 
-                col1, col2, col3, col4 = st.columns([1,1,1,1])  # col1 menor, col2 maior
-                with col1:
+            col_left, col_right = st.columns([1.5, 2.5])
+
+            # --- COLUNA ESQUERDA: tipo de particionamento ---
+            with col_left:
+                tipo_particionamento = st.radio(
+                    "Selecione o tipo:",
+                    ("Marcos temporais", "Mesmo tamanho temporal", "Mesma quantidade de registros"),
+                    index=0,
+                    key="tipo_particionamento_radio",
+                )
+
+            # --- COLUNA DIREITA: conteúdo dinâmico conforme o tipo ---
+            with col_right:
+                # Opção 1: Marcos temporais
+                if tipo_particionamento == "Marcos temporais":
+                    if "marcos_temporais" not in st.session_state:
+                        st.session_state.marcos_temporais = []
+
                     novo_marco = st.date_input(
                         "Selecione um marco temporal",
                         min_value=data_min.date(),
                         max_value=data_max.date(),
-                        label_visibility="collapsed"
                     )
-                with col2:
-                    # Botão para adicionar marco
-                    if st.button("Adicionar marco"):
-                        if novo_marco not in st.session_state.marcos_temporais:
-                            st.session_state.marcos_temporais.append(novo_marco)
-                            #st.success(f"Marco {novo_marco} adicionado!")
+
+                    col_add, col_list = st.columns([1, 3])
+                    with col_add:
+                        if st.button("Adicionar marco", key="add_marco_btn"):
+                            if novo_marco not in st.session_state.marcos_temporais:
+                                st.session_state.marcos_temporais.append(novo_marco)
+                            else:
+                                st.warning("Este marco já foi adicionado.")
+                    
+                    with col_list:
+                        if st.session_state.marcos_temporais:
+                            st.write("Marcos definidos:")
+                            for i, m in enumerate(sorted(st.session_state.marcos_temporais)):
+                                col_m1, col_m2 = st.columns([4, 1])
+                                with col_m1:
+                                    st.write(f"- {m}")
+                                with col_m2:
+                                    if st.button("❌", key=f"remove_marco_{i}"):
+                                        st.session_state.marcos_temporais.pop(i)
+
+                    col_btn, col_msg = st.columns([1, 3])
+                    with col_btn:
+                        gerar_marcos = st.button("Gerar Partições", key="btn_particoes_marcos")
+
+                    if gerar_marcos:
+                        if not st.session_state.marcos_temporais:
+                            st.warning("Nenhum marco temporal definido.")
                         else:
-                            st.warning("Este marco já foi adicionado.")
-
-                # Mostrar lista de marcos já adicionados com opção de remover
-                if st.session_state.marcos_temporais:
-                    st.write("Marcos temporais definidos:")
-                    for i, m in enumerate(sorted(st.session_state.marcos_temporais)):
-                        col1, col2, col3, col4 = st.columns([1,1,1,1])
-                        with col1:
-                            st.write(f"- {m}")
-                        with col2:
-                            if st.button("❌", key=f"remove_marco_{i}"):
-                                st.session_state.marcos_temporais.pop(i)
-            
-                #st.subheader("Particionar dados por marcos temporais")
-
-                if st.button("Gerar Partições"):
-                    if "marcos_temporais" not in st.session_state or not st.session_state.marcos_temporais:
-                        st.warning("⚠️ Nenhum marco temporal definido. Por favor, adicione ao menos um marco.")
-                    else:
-                        df_original = st.session_state.dados_original.copy()
-
-                        # Garante que a coluna de datas está em datetime
-                        col_data = None
-                        for c in df_original.columns:
-                            if pd.api.types.is_datetime64_any_dtype(df_original[c]):
-                                col_data = c
-                                break
-                            try:
-                                converted = pd.to_datetime(df_original[c], errors='coerce')
-                                if converted.notna().sum() > 0:
+                            df_original = st.session_state.dados_original.copy()
+                            col_data = None
+                            for c in df_original.columns:
+                                if pd.api.types.is_datetime64_any_dtype(df_original[c]):
                                     col_data = c
-                                    df_original[c] = converted
                                     break
-                            except Exception:
-                                continue
+                            if col_data:
+                                marcos = [pd.to_datetime(m) for m in sorted(st.session_state.marcos_temporais)]
+                                data_min = df_original[col_data].min()
+                                data_max = df_original[col_data].max()
+                                limites = [data_min] + marcos + [data_max]
+                                particoes = []
+                                for i in range(len(limites) - 1):
+                                    inicio = limites[i]
+                                    fim = limites[i + 1]
+                                    if i > 0:
+                                        inicio += pd.Timedelta(days=1)
+                                    part = df_original[
+                                        (df_original[col_data] >= inicio)
+                                        & (df_original[col_data] <= fim)
+                                    ].copy()
+                                    particoes.append({"inicio": inicio, "fim": fim, "dados": part})
 
-                        if col_data is None:
-                            st.error("Não foi possível detectar uma coluna de data na base.")
-                        else:
-                            # Converte os marcos para datetime também
-                            marcos = [pd.to_datetime(m) for m in sorted(st.session_state.marcos_temporais)]
-                            data_min = df_original[col_data].min()
-                            data_max = df_original[col_data].max()
+                                st.session_state.particoes_temporais = particoes
+                                st.session_state.analise_temporal_em_andamento = False
+                                st.session_state.analise_temporal_pronta = False
+                                st.session_state.particoes_last_msg = (
+                                    f"Particionamento concluído! Total de partições: {len(particoes)}"
+                                )
 
-                            # Limites de cada partição
-                            limites = [data_min] + marcos + [data_max]
+                    with col_msg:
+                        if "particoes_last_msg" in st.session_state:
+                            st.success(st.session_state.particoes_last_msg)
 
-                            particoes = []
-                            for i in range(len(limites)-1):
-                                inicio = limites[i]
-                                fim = limites[i+1]
-                                # A segunda partição em diante começa 1 dia depois do fim anterior
-                                if i > 0:
-                                    inicio += pd.Timedelta(days=1)
-                                part = df_original[
-                                    (df_original[col_data] >= inicio) &
-                                    (df_original[col_data] <= fim)
-                                ].copy()
-                                particoes.append({"inicio": inicio, "fim": fim, "dados": part})
+                # Opção 2: Mesmo tamanho
+                elif tipo_particionamento == "Mesmo tamanho temporal":
 
-                            # Salva no session_state
-                            st.session_state.particoes_temporais = particoes
-
-                            # Mostrar resumo
-                            #st.success(f"Particionamento concluído! Total de partições: {len(particoes)}")
-                            #for i, p in enumerate(particoes):
-                            #    st.write(f"Partição {i+1}: **{p['inicio'].date()}** até **{p['fim'].date()}** — {len(p['dados'])} registros")
-                            
-                            
-                            # (depois de montar a lista 'particoes')
-                            st.session_state.particoes_temporais = particoes
-                            st.session_state.analise_temporal_em_andamento = False  # ✅ zera análise
-                            st.session_state.particoes_last_msg = f"Particionamento concluído! Total de partições: {len(particoes)}"
-                            # ❌ NÃO exiba resumo aqui; o bloco global cuidará disso
-
-            #Opção 2: por janela fixa de tempo (escolhendo a quantidade de tempo)
-            elif tipo_particionamento == "Mesmo tamanho":
-                #st.subheader("Particionamento por janelas fixas")
-                # Input do usuário: quantos meses por partição
-                st.markdown("""
-                    <style>
-                    /* Altera apenas o campo number_input */
-                    div[data-testid="stNumberInput"] {
-                        width: 130px !important; /* ajuste o valor conforme quiser */
-                    }
-                    </style>
-                    """, unsafe_allow_html=True)
-                num_particao = st.number_input(
-                    "Número de partições",
-                    min_value=1,
-                    max_value=60,
-                    value=12
-                )
-                # Botão para gerar as partições
-                if st.button("Gerar partições"):
-                    particoes_fixas = analysis.particionar_por_tempo_equal_length(df_original, col_data, num_particao)
-        
-                    #st.success(f"Foram geradas {len(particoes_fixas)} partições!")
-                    # Salva no session_state
-                    st.session_state.particoes_temporais = particoes_fixas
-                    # Exibir informações de cada partição em uma linha só
-                    for i, p in enumerate(particoes_fixas):
-                        delta = relativedelta(p['data_max'], p['data_min'])
-                        duracao_texto = []
-                        if delta.years > 0:
-                            duracao_texto.append(f"{delta.years} ano{'s' if delta.years > 1 else ''}")
-                        if delta.months > 0:
-                            duracao_texto.append(f"{delta.months} mes{'es' if delta.months > 1 else ''}")
-                        if delta.days > 0 and delta.years == 0:
-                            duracao_texto.append(f"{delta.days} dia{'s' if delta.days > 1 else ''}")
-
-                        duracao_formatada = ", ".join(duracao_texto) or "0 dias"
-
-                        #st.write(
-                        #    f"Partição {i+1}: {len(p['dados'])} registros | "
-                        #    f"{p['data_min'].date()} → {p['data_max'].date()} "
-                        #    f"({duracao_formatada})"
-                        #)
-                        
-                        
-                        # (depois de montar a lista 'particoes')
-                        #st.session_state.particoes_temporais = particoes
-                        st.session_state.analise_temporal_em_andamento = False  # ✅ zera análise
-                        st.session_state.particoes_last_msg = f"Foram geradas {len(particoes_fixas)} partições!"
-                        # ❌ NÃO exiba resumo aqui; o bloco global cuidará disso
-
-            #Opção 2: por janela fixa de tempo (escolhendo a quantidade de tempo)
-            #elif tipo_particionamento == "Por janelas fixas de tempo":
-                #st.subheader("Particionamento por janelas fixas")
-                # Input do usuário: quantos meses por partição
-            #    st.markdown("""
-            #        <style>
-            #        /* Altera apenas o campo number_input */
-            #        div[data-testid="stNumberInput"] {
-            #            width: 130px !important; /* ajuste o valor conforme quiser */
-            #        }
-            #        </style>
-            #        """, unsafe_allow_html=True)
-            #    meses_por_particao = st.number_input(
-            #        "Meses por partição",
-            #        min_value=1,
-            #        max_value=60,
-            #        value=12
-            #    )
-                # Botão para gerar as partições
-                #if st.button("Gerar partições"):
-                #    particoes_fixas = analysis.particionar_por_meses(df_original, col_data=col_data, meses_por_particao=meses_por_particao)
-        
-                #    st.success(f"Foram geradas {len(particoes_fixas)} partições!")
-                    # Salva no session_state
-                #    st.session_state.particoes_temporais = particoes_fixas
-                    # Exibir informações de cada partição em uma linha só
-                #    for i, p in enumerate(particoes_fixas):
-                #        st.write(f"Partição {i+1}: {len(p['dados'])} registros | {p['data_min'].date()} → {p['data_max'].date()}")
-
-            elif tipo_particionamento == "Mesma quantidade de registros":
-
-                # Estilo igual ao outro particionamento (controla largura do campo)
-                st.markdown("""
-                    <style>
-                    /* Altera apenas o campo number_input */
-                    div[data-testid="stNumberInput"] {
-                        width: 130px !important; /* mesmo tamanho do outro campo */
-                    }
-                    </style>
+                    # 🔧 CSS: deixa o number_input mais compacto, MAS preservando os botões +/-
+                    st.markdown("""
+                        <style>
+                        /* A caixa externa continua grande o suficiente para os botões */
+                        div[data-testid="stNumberInput"] > div {
+                            max-width: 110px !important;    /* largura interna do input */
+                        }
+                        </style>
                     """, unsafe_allow_html=True)
 
-                # Campo numérico no mesmo formato
-                qtd_particao = st.number_input(
-                    "Número de partições:",
-                    min_value=1,
-                    max_value=len(df_original) if len(df_original) > 0 else 1,
-                    value=1,
-                    step=1
-                )
+                    # 🔹 Organização em linha: número | botão | mensagem
+                    col_num, col_btn, col_msg = st.columns([2, 1, 2])
 
-                qtd_particao = int(qtd_particao)
+                    with col_num:
+                        # 🔹 Subdivide a coluna: rótulo | input
+                        c_rotulo, c_input = st.columns([1.5, 2])
 
-                # Botão para gerar as partições
-                if st.button("Gerar partições"):
-                    particoes_registros = analysis.particionar_por_quantidade_igual(df_original, qtd_particao, col_data=col_data)
-                    
-                    #st.success(f"Foram geradas {len(particoes_registros)} partições!")
-                    # Salva no session_state
-                    st.session_state.particoes_temporais = particoes_registros
-                    # Exibir informações de cada partição em uma linha só
-                    #for i, p in enumerate(particoes_registros):
-                    #   st.write(f"Partição {i+1}: {len(p['dados'])} registros | {p['data_min'].date()} → {p['data_max'].date()}")
-                    # (depois de montar a lista 'particoes')
-                    
-                    
-                    #st.session_state.particoes_temporais = particoes
-                    st.session_state.analise_temporal_em_andamento = False  # ✅ zera análise
-                    st.session_state.particoes_last_msg = f"Foram geradas {len(particoes_registros)} partições!"
-                    # ❌ NÃO exiba resumo aqui; o bloco global cuidará disso
-                
-            #elif tipo_particionamento == "Por quantidade de registros":
-            
-                #st.markdown("**Particionamento por quantidade de registros**")
+                        with c_rotulo:
+                            st.markdown("Num. partições: ")
 
-            #    tamanho_particao = numeric_text_input(
-            #        label="Quantidade de registros por partição:",
-            #        key="tamanho_particao_input",
-            #        value=min(100, len(df_original)),
-            #        min_value=10,
-            #        max_value=len(df_original),
-            #        decimals=0,
-            #        width=30
-            #    )
+                        with c_input:
+                            num_particao = st.number_input(
+                                label="N. partições: ",
+                                min_value=1,
+                                max_value=60,
+                                value=1,
+                                key="num_particoes_tempo",
+                                label_visibility="collapsed",  # escondemos o label nativo
+                            )
 
-            #    tamanho_particao = int(tamanho_particao)
+                    with col_btn:
+                        gerar_fixas = st.button(
+                            "Gerar Partições",
+                            key="btn_particoes_tempo",
+                            use_container_width=True
+                        )
 
-                # Botão para gerar as partições
-            #    if st.button("Gerar partições"):
-            #        particoes_registros = analysis.particionar_por_registros(df_original, tamanho_particao, col_data=col_data)
-        
-            #        st.success(f"Foram geradas {len(particoes_registros)} partições!")
-                    # Salva no session_state
-            #        st.session_state.particoes_temporais = particoes_registros
-                    # Exibir informações de cada partição em uma linha só
-            #        for i, p in enumerate(particoes_registros):
-            #           st.write(f"Partição {i+1}: {len(p['dados'])} registros | {p['data_min'].date()} → {p['data_max'].date()}")
-            
-            
+                    if gerar_fixas:
+                        particoes_fixas = analysis.particionar_por_tempo_equal_length(
+                            df_original, col_data, num_particao
+                        )
+
+                        st.session_state.particoes_temporais = particoes_fixas
+                        st.session_state.analise_temporal_em_andamento = False
+                        st.session_state.analise_temporal_pronta = False
+                        st.session_state.analise_atual = None
+
+                        st.session_state.particoes_last_msg = (
+                            f"{len(particoes_fixas)} partições geradas!"
+                        )
+
+                    with col_msg:
+                        if "particoes_last_msg" in st.session_state:
+                            st.success(f"✅ {st.session_state.particoes_last_msg}")
+
+
+                # Opção 3: Mesma quantidade de registros
+                elif tipo_particionamento == "Mesma quantidade de registros":
+                    qtd_particao = st.number_input(
+                        "Número de partições:",
+                        min_value=1,
+                        max_value=len(df_original) if len(df_original) > 0 else 1,
+                        value=1,
+                        step=1
+                    )
+
+                    col_btn, col_msg = st.columns([2, 2])
+                    with col_btn:
+                        gerar_qtd = st.button("Gerar Partições", key="btn_particoes_qtd")
+
+                    if gerar_qtd:
+                        particoes_registros = analysis.particionar_por_quantidade_igual(
+                            df_original, int(qtd_particao), col_data=col_data
+                        )
+                        st.session_state.particoes_temporais = particoes_registros
+                        st.session_state.analise_temporal_em_andamento = False
+                        st.session_state.analise_temporal_pronta = False
+                        st.session_state.particoes_last_msg = (
+                            f"{len(particoes_registros)} partições geradas!"
+                        )
+
+                    with col_msg:
+                        if "particoes_last_msg" in st.session_state:
+                            st.success(st.session_state.particoes_last_msg)
+
+
             # === Resumo persistente das partições + botão da análise temporal ===
             if "particoes_temporais" in st.session_state and st.session_state.particoes_temporais:
-                st.markdown("---")
-                st.success(st.session_state.get("particoes_last_msg", f"✅ {len(st.session_state.particoes_temporais)} partições geradas."))
+                #st.success(st.session_state.get("particoes_last_msg", f"{len(st.session_state.particoes_temporais)} partições geradas."))
 
                 # Renderização do resumo (UM lugar só)
                 for i, p in enumerate(st.session_state.particoes_temporais):
-                    # Suporta os dois formatos que você usa (inicio/fim ou data_min/data_max)
+                    # Detecta se é "Mesmo tamanho" com base no tipo salvo
+                    tipo = st.session_state.get("tipo_particionamento", "")
+
+                    # Suporta ambos formatos (inicio/fim ou data_min/data_max)
                     if "inicio" in p and "fim" in p:
-                        st.write(f"Partição {i+1}: **{p['inicio'].date()}** → **{p['fim'].date()}** — {len(p['dados'])} registros")
+                        data_ini, data_fim = p["inicio"], p["fim"]
                     else:
-                        st.write(f"Partição {i+1}: {len(p['dados'])} registros | {p['data_min'].date()} → {p['data_max'].date()}")
+                        data_ini, data_fim = p["data_min"], p["data_max"]
+
+                    duracao_texto = ""
+                    #if tipo == "Mesmo tamanho temporal":
+                    delta = relativedelta(data_fim, data_ini)
+                    partes = []
+                    if delta.years > 0:
+                        partes.append(f"{delta.years} ano{'s' if delta.years > 1 else ''}")
+                    if delta.months > 0:
+                        partes.append(f"{delta.months} mes{'es' if delta.months > 1 else ''}")
+                    if delta.days > 0 and not partes:
+                        partes.append(f"{delta.days} dia{'s' if delta.days > 1 else ''}")
+                    
+                    duracao_calculada = ", ".join(partes)
+                    duracao_texto = f" ({duracao_calculada if duracao_calculada else '0 dias'})"
+
+                    st.write(
+                        f"Intervalo {i+1}: **{data_ini.strftime('%d/%m/%Y')}** → **{data_fim.strftime('%d/%m/%Y')}** — "
+                        f"{len(p['dados'])} registros {duracao_texto}"
+                    )
 
                 st.markdown("---")
                 if st.button("Gerar Análise Temporal", key="botao_analise_temporal"):
+                    # 🔹 Garante que a análise só será iniciada manualmente
                     st.session_state.analise_temporal_em_andamento = True
+                    st.session_state.analise_temporal_pronta = False
+                    st.session_state.analise_atual = None
 
             # --- BLOCO SEPARADO: EXECUTA ANÁLISE TEMPORAL QUANDO A FLAG ESTIVER ATIVA ---
-            if st.session_state.get("analise_temporal_em_andamento", False):
+            if st.session_state.get("analise_temporal_em_andamento", False) and not st.session_state.get("analise_temporal_pronta", False):
 
                 st.info("🔍 Iniciando análise temporal das regras...")
 
@@ -1001,6 +969,16 @@ elif tab == "Partições":
                     if pd.api.types.is_datetime64_any_dtype(st.session_state.particoes_temporais[0]["dados"][c]):
                         col_data = c
                         break
+                
+                # ==========================================================
+                # Lista para guardar tudo o que será gerado nesta análise
+                # ==========================================================
+                analise_atual = {
+                    "graficos": [],
+                    "tabelas": [],
+                    "descricao": f"Análise com {len(st.session_state.particoes_temporais)} partições e {len(st.session_state.regras)} meta-regra(s)"
+                }
+
 
                 # === Análise Temporal das Regras ===
                 for regra_user in st.session_state.regras:
@@ -1082,15 +1060,18 @@ elif tab == "Partições":
                                     ini, fim = p["inicio"].date(), p["fim"].date()
                                 else:
                                     ini, fim = p["data_min"].date(), p["data_max"].date()
-                                periodos.append(f"Partição {i+1}: {ini.strftime('%d/%m/%Y')} → {fim.strftime('%d/%m/%Y')}")
+                                periodos.append(f"{ini.strftime('%d/%m/%Y')} → {fim.strftime('%d/%m/%Y')}")
                             df_medidas["Periodo"] = periodos
                             cols = st.columns(3)
+                            figs_regra = {}
                             for j, medida in enumerate(["suporte", "confianca", "lift"]):
                                 with cols[j]:
+                                    
                                     # Cria gráfico de barras com valores da medida
                                     fig = px.bar(
                                         df_medidas,
-                                        x=df_medidas.index,
+                                        #x=df_medidas.index,
+                                        x="Periodo",
                                         y=medida,
                                         text=df_medidas[medida].apply(lambda x: f"{x:.2f}"),
                                         title=medida.capitalize(),
@@ -1169,3 +1150,80 @@ elif tab == "Partições":
                                         use_container_width=True,
                                         key=f"{ant_val}_{cons_val}_{medida}_{i}"
                                     )
+                                    
+                                    # gera fig normalmente...
+                                    figs_regra[medida] = fig
+                                    # Guarda um conjunto de 3 gráficos (um grupo por regra)
+                                    if "regras_plotadas" not in locals():
+                                        regras_plotadas = 0
+                                    if j == 2:  # quando chegar no último gráfico (lift)
+                                        analise_atual["graficos"].append({
+                                            "titulo": f"{ant_val} → {cons_val}",
+                                            "figs": figs_regra  # conjunto dos três gráficos
+                                        })
+                                        regras_plotadas += 1
+
+                nome_analise = f"Análise {len(st.session_state.analises_temporais) + 1}"
+                analise_atual["nome"] = nome_analise
+                analise_atual["parametros"] = {
+                    "suporte_min": st.session_state.min_support,
+                    "confianca_min": st.session_state.min_confidence,
+                    "meta_regras": copy.deepcopy(st.session_state.regras),
+                    "particoes": copy.deepcopy(st.session_state.particoes_temporais),
+                    "tipo_particionamento": st.session_state.get("tipo_particionamento", "Não informado")
+                }
+
+                st.session_state.analises_temporais.append(copy.deepcopy(analise_atual))
+                # 🔹 Marca como concluída
+                st.session_state.analise_temporal_em_andamento = False
+                st.session_state.analise_temporal_pronta = True
+                st.success(f"💾 {nome_analise} salva com sucesso!")
+
+elif tab == "Histórico de Análises":
+    st.subheader("Histórico de Análises Temporais")
+
+    if "analises_temporais" not in st.session_state or not st.session_state.analises_temporais:
+        st.info("Nenhuma análise temporal foi realizada ainda.")
+    else:
+        abas_hist = st.tabs([a["nome"] for a in st.session_state.analises_temporais])
+
+        for i, analise in enumerate(st.session_state.analises_temporais):
+            with abas_hist[i]:
+                st.markdown(f"### {analise['nome']}")
+                st.write(analise["descricao"])
+
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.markdown(f"**Suporte mínimo:** {analise['parametros']['suporte_min']}")
+                with col2:
+                    st.markdown(f"**Confiança mínima:** {analise['parametros']['confianca_min']}")
+                with col3:
+                    st.markdown(f"**Tipo de particionamento:** {analise['parametros'].get('tipo_particionamento', '-')}")
+                st.markdown("---")
+
+                st.markdown("**Meta-regras analisadas:**")
+                for regra in analise['parametros']['meta_regras']:
+                    st.write(f"• {regra['antecedente']} → {regra['consequente']}")
+
+                st.markdown("---")
+                st.markdown("**Partições geradas:**")
+                #duracao_calculada = ", ".join(partes)
+                #duracao_texto = f" ({duracao_calculada if duracao_calculada else '0 dias'})"
+                for j, p in enumerate(analise['parametros']['particoes']):
+                    if "inicio" in p and "fim" in p:
+                        st.write(f"Intervalo {j+1}: {p['inicio'].date()} → {p['fim'].date()} — {len(p['dados'])} registros")
+                    else:
+                        st.write(f"Intervalo {j+1}: {p['data_min'].date()} → {p['data_max'].date()} — {len(p['dados'])} registros")
+
+                st.markdown("---")
+
+                for regra_plotada in analise["graficos"]:
+                    st.markdown(f"### {regra_plotada['titulo']}")
+                    cols = st.columns(3)
+                    for j, medida in enumerate(["suporte", "confianca", "lift"]):
+                        with cols[j]:
+                            st.plotly_chart(
+                                regra_plotada["figs"][medida],
+                                use_container_width=True,
+                                key=f"hist_{i}_{regra_plotada['titulo']}_{medida}"
+                            )

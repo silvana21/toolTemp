@@ -856,39 +856,36 @@ def particionar_por_registros(df, tamanho_particao, col_data):
 
 def particionar_por_quantidade_igual(df, n_particoes, col_data):
     """
-    Divide o DataFrame em n_particoes aproximadamente iguais em número de registros.
+    Divide o DataFrame em n_particoes aproximadamente iguais em número de registros,
+    distribuindo registros excedentes nas últimas partições.
 
-    Parâmetros:
-        df (pd.DataFrame): base completa
-        n_particoes (int): número de partições desejadas
-        col_data (str): nome da coluna de data usada para marcar os intervalos
-
-    Retorna:
-        list[dict]: lista de partições no formato:
-            [
-                {"data_min": ..., "data_max": ..., "dados": df_part},
-                ...
-            ]
+    Exemplo: se 10 registros para 3 partições => [3, 3, 4]
     """
-    # Evita criar mais partições do que registros
-    n_particoes = min(n_particoes, len(df))
 
-    # Índices de corte (divisão igualitária)
-    cortes = np.linspace(0, len(df), n_particoes + 1, dtype=int)
+    n_total = len(df)
+    if n_total == 0:
+        return []
+
+    n_particoes = min(n_particoes, n_total)
+    base_size = n_total // n_particoes
+    resto = n_total % n_particoes
 
     particoes = []
-    for i in range(n_particoes):
-        inicio, fim = cortes[i], cortes[i + 1]
-        df_part = df.iloc[inicio:fim].copy()
+    inicio = 0
 
+    for i in range(n_particoes):
+        fim = inicio + base_size + (1 if i >= n_particoes - resto else 0)
+        df_part = df.iloc[inicio:fim].copy()
         if not df_part.empty:
             particoes.append({
                 "data_min": df_part[col_data].min(),
                 "data_max": df_part[col_data].max(),
-                "dados": df_part,
+                "dados": df_part
             })
+        inicio = fim
 
     return particoes
+
 
 def particionar_por_tempo_equal_length(df, col_data, n_particoes):
     """
