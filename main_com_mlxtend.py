@@ -24,6 +24,8 @@ def _init_state():
         "regras_df": None,
         "min_support": 0.01,
         "min_confidence": 0.01,
+        "min_support_temporal": 0.01,
+        "min_confidence_temporal": 0.01,
         # estado da UI de seleção de regra (atributo -> atributo)
         "regras_selecionadas": [],  # lista de strings "AtribA -> AtribB"
         "campo_antecedente_habilitado": True,
@@ -105,8 +107,8 @@ with st.sidebar:
 
     tab = option_menu(
         None,
-        ["Carregar CSV", "Regras Gerais", "Análise Temporal", "Histórico de Análises"],
-        icons=["file-earmark-arrow-up", "diagram-3", "calendar3", "bar-chart"],
+        ["Carregar CSV", "Regras Gerais", "Análise Temporal", "Histórico de Análises Gerais", "Histórico de Análises Temporais"],
+        icons=["file-earmark-arrow-up", "diagram-3", "calendar3", "bar-chart", "clock-history"],
         menu_icon="cast",
         default_index=0,
         styles={
@@ -322,6 +324,13 @@ if tab == "Carregar CSV":
 
 # --- ABA 2: Definição de Regras ---
 elif tab == "Regras Gerais":
+    
+    # Inicializa histórico de análises gerais
+    if "analises_gerais" not in st.session_state:
+        st.session_state.analises_gerais = []
+    if "salvou_analise_geral" not in st.session_state:
+        st.session_state.salvou_analise_geral = True
+    
     if "__rerun_trigger__" in st.session_state:
         del st.session_state["__rerun_trigger__"]
     st.subheader("Configuração do algoritmo")
@@ -470,6 +479,10 @@ elif tab == "Regras Gerais":
         # Botão para gerar regras filtradas
         # =============================
         if st.button("Gerar regras"):
+            
+            st.session_state.salvou_analise_geral = False  # salvar só depois, na parte dos gráficos
+            st.session_state.mostrar_regras = False
+            
             st.session_state.mostrar_regras = False
             progress = st.progress(0)
             
@@ -569,6 +582,9 @@ elif tab == "Regras Gerais":
                     unsafe_allow_html=True
                 )
 
+                #lista para guardar os gráficos
+                lista_graficos = []
+
                 for regra_user in st.session_state.regras:
                     atributo_antecedente = regra_user["antecedente"]
                     atributo_consequente = regra_user["consequente"]
@@ -616,6 +632,12 @@ elif tab == "Regras Gerais":
                         cols = st.columns(3)
                         cores_fixas = {"suporte": "skyblue", "confianca": "skyblue", "lift": "skyblue"}
 
+                        #estrutura para salvar os gráficos desta "regra"
+                        regra_plotada = {
+                            "titulo": f"{atributo_antecedente} → {cons_val}",
+                            "figs": {}
+                        }
+
                         for i, medida in enumerate(["suporte", "confianca", "lift"]):
                             with cols[i]:
                                 fig = px.bar(
@@ -649,20 +671,30 @@ elif tab == "Regras Gerais":
                                 )
                                 st.plotly_chart(fig, use_container_width=True)
 
-                fim_graficos = time.time()
-                tempo_graficos = fim_graficos - inicio_graficos
+                                #guarda a figura
+                                regra_plotada["figs"][medida] = fig
+                        #depois do loop das 3 medidas, guarda essa regra na lista geral
+                        lista_graficos.append(regra_plotada)
 
-                tempos = st.session_state.get("tempos_execucao", {})
-                tempo_regras = tempos.get("tempo_regras", 0)
-                tempo_filtro = tempos.get("tempo_filtro", 0)
+                #NOVO: salvar a análise geral no histórico
+                if not st.session_state.get("salvou_analise_geral", True):
+                    nome_arquivo_atual = st.session_state.get("arquivo_carregado", "(arquivo não registrado)")
+                    nome_analise = f"Análise geral {len(st.session_state.analises_gerais) + 1}"
 
-                tempo_total = tempo_regras + tempo_filtro + tempo_graficos  # soma explícita
+                    analise_geral = {
+                        "nome": nome_analise,
+                        "arquivo": nome_arquivo_atual,
+                        "descricao": "Análise geral das meta-regras selecionadas.",
+                        "parametros": {
+                            "suporte_min": st.session_state.min_support,
+                            "confianca_min": st.session_state.min_confidence,
+                            "meta_regras": copy.deepcopy(st.session_state.regras),
+                        },
+                        "graficos": lista_graficos,  #os figs que preenchemos lá em cima
+                    }
 
-                st.markdown("---")
-                st.info(f"Tempo para gerar regras: **{tempo_regras:.2f} s**")
-                st.info(f"Tempo para filtrar regras: **{tempo_filtro:.2f} s**")
-                st.info(f"Tempo para gerar gráficos: **{tempo_graficos:.2f} s**")
-                st.success(f"Tempo total: **{tempo_total:.2f} s**")
+                    st.session_state.analises_gerais.append(analise_geral)
+                    st.session_state.salvou_analise_geral = True
 
     else:
         st.warning("Por favor, carregue o arquivo CSV antes de continuar.")
@@ -749,7 +781,7 @@ elif tab == "Análise Temporal":
                     "Selecione o tipo:",
                     ("Marcos temporais", "Mesmo tamanho temporal", "Mesma quantidade de registros"),
                     index=0,
-                    key="tipo_particionamento_radio",
+                    key="tipo_particionamento",
                 )
 
             # --- COLUNA DIREITA: conteúdo dinâmico conforme o tipo ---
@@ -791,36 +823,33 @@ elif tab == "Análise Temporal":
                     if gerar_marcos:
                         if not st.session_state.marcos_temporais:
                             st.warning("Nenhum marco temporal definido.")
+                        elif col_data is None:
+                            st.error("Não foi possível detectar uma coluna de data para particionar.")
                         else:
-                            df_original = st.session_state.dados_original.copy()
-                            col_data = None
-                            for c in df_original.columns:
-                                if pd.api.types.is_datetime64_any_dtype(df_original[c]):
-                                    col_data = c
-                                    break
-                            if col_data:
-                                marcos = [pd.to_datetime(m) for m in sorted(st.session_state.marcos_temporais)]
-                                data_min = df_original[col_data].min()
-                                data_max = df_original[col_data].max()
-                                limites = [data_min] + marcos + [data_max]
-                                particoes = []
-                                for i in range(len(limites) - 1):
-                                    inicio = limites[i]
-                                    fim = limites[i + 1]
-                                    if i > 0:
-                                        inicio += pd.Timedelta(days=1)
-                                    part = df_original[
-                                        (df_original[col_data] >= inicio)
-                                        & (df_original[col_data] <= fim)
-                                    ].copy()
-                                    particoes.append({"inicio": inicio, "fim": fim, "dados": part})
+                            # aqui usamos o df_original e col_data já detectados lá em cima 👇
+                            marcos = [pd.to_datetime(m) for m in sorted(st.session_state.marcos_temporais)]
+                            data_min = df_original[col_data].min()
+                            data_max = df_original[col_data].max()
+                            limites = [data_min] + marcos + [data_max]
 
-                                st.session_state.particoes_temporais = particoes
-                                st.session_state.analise_temporal_em_andamento = False
-                                st.session_state.analise_temporal_pronta = False
-                                st.session_state.particoes_last_msg = (
-                                    f"Particionamento concluído! Total de partições: {len(particoes)}"
-                                )
+                            particoes = []
+                            for i in range(len(limites) - 1):
+                                inicio = limites[i]
+                                fim = limites[i + 1]
+                                if i > 0:
+                                    inicio += pd.Timedelta(days=1)
+                                part = df_original[
+                                    (df_original[col_data] >= inicio) &
+                                    (df_original[col_data] <= fim)
+                                ].copy()
+                                particoes.append({"inicio": inicio, "fim": fim, "dados": part})
+
+                            st.session_state.particoes_temporais = particoes
+                            st.session_state.analise_temporal_em_andamento = False
+                            st.session_state.analise_temporal_pronta = False
+                            st.session_state.particoes_last_msg = (
+                                f"Particionamento concluído! Total de partições: {len(particoes)}"
+                            )
 
                     with col_msg:
                         if "particoes_last_msg" in st.session_state:
@@ -938,7 +967,7 @@ elif tab == "Análise Temporal":
                         partes.append(f"{delta.years} ano{'s' if delta.years > 1 else ''}")
                     if delta.months > 0:
                         partes.append(f"{delta.months} mes{'es' if delta.months > 1 else ''}")
-                    if delta.days > 0 and not partes:
+                    if delta.days > 0:
                         partes.append(f"{delta.days} dia{'s' if delta.days > 1 else ''}")
                     
                     duracao_calculada = ", ".join(partes)
@@ -950,12 +979,45 @@ elif tab == "Análise Temporal":
                     )
 
                 st.markdown("---")
+                
+                # --- BLOCO SEPARADO: Mostrar as opções de sup e conf para escolha ---
+                # Cria 3 colunas: esquerda, central e direita
+                st.subheader("Configuração do algoritmo para análise temporal")
+                col_esq, col_central, col_dir = st.columns([2, 1, 1])
+
+                with col_esq:
+                    # Inputs lado a lado dentro da coluna central
+                    col_s, col_c = st.columns([1,1])
+                with col_s:
+                    min_support_pct_temporal = numeric_text_input(
+                        "Suporte mínimo (%)",
+                        key="min_support_input",
+                        value=st.session_state.min_support_temporal * 100,
+                        min_value=0.0,
+                        max_value=100.0
+                    )
+                    min_support_temporal = min_support_pct_temporal / 100.0
+                with col_c:
+                    min_confidence_pct_temporal = numeric_text_input(
+                        "Confiança mínima (%)",
+                        key="min_confidence_input",
+                        value=st.session_state.min_confidence_temporal * 100,
+                        min_value=0.0,
+                        max_value=100.0
+                    )
+                    min_confidence_temporal = min_confidence_pct_temporal / 100.0
+                st.session_state.min_support_temporal = min_support_temporal
+                st.session_state.min_confidence_temporal = min_confidence_temporal
+                #colunas = list(st.session_state.dados_processados.columns)
+                
                 if st.button("Gerar Análise Temporal", key="botao_analise_temporal"):
                     # 🔹 Garante que a análise só será iniciada manualmente
                     st.session_state.analise_temporal_em_andamento = True
                     st.session_state.analise_temporal_pronta = False
                     st.session_state.analise_atual = None
 
+            
+            
             # --- BLOCO SEPARADO: EXECUTA ANÁLISE TEMPORAL QUANDO A FLAG ESTIVER ATIVA ---
             if st.session_state.get("analise_temporal_em_andamento", False) and not st.session_state.get("analise_temporal_pronta", False):
 
@@ -1015,8 +1077,8 @@ elif tab == "Análise Temporal":
                                 df_part_tratado, _, _ = analysis.preparar_dados_para_mineracao_from_df(df_part)
                                 df_regras_part = analysis.gerar_regras_com_mlxtend2(
                                     df_part_tratado,
-                                    st.session_state.min_support,
-                                    st.session_state.min_confidence
+                                    st.session_state.min_support_temporal,
+                                    st.session_state.min_confidence_temporal
                                 )
 
                                 if df_regras_part.empty:
@@ -1162,12 +1224,13 @@ elif tab == "Análise Temporal":
                                             "figs": figs_regra  # conjunto dos três gráficos
                                         })
                                         regras_plotadas += 1
-
+                nome_arquivo_atual = st.session_state.get("arquivo_carregado", "(arquivo não registrado)")
                 nome_analise = f"Análise {len(st.session_state.analises_temporais) + 1}"
                 analise_atual["nome"] = nome_analise
+                analise_atual["arquivo"] = nome_arquivo_atual
                 analise_atual["parametros"] = {
-                    "suporte_min": st.session_state.min_support,
-                    "confianca_min": st.session_state.min_confidence,
+                    "suporte_min_temporal": st.session_state.min_support_temporal,
+                    "confianca_min_temporal": st.session_state.min_confidence_temporal,
                     "meta_regras": copy.deepcopy(st.session_state.regras),
                     "particoes": copy.deepcopy(st.session_state.particoes_temporais),
                     "tipo_particionamento": st.session_state.get("tipo_particionamento", "Não informado")
@@ -1178,8 +1241,98 @@ elif tab == "Análise Temporal":
                 st.session_state.analise_temporal_em_andamento = False
                 st.session_state.analise_temporal_pronta = True
                 st.success(f"💾 {nome_analise} salva com sucesso!")
+# ---------- Aba 4: Histórico de Análises Gerais ----------
+# --- ABA: Histórico de Análises Gerais ---
+elif tab == "Histórico de Análises Gerais":
+    st.subheader("Histórico de Análises Gerais")
 
-elif tab == "Histórico de Análises":
+    if "analises_gerais" not in st.session_state or not st.session_state.analises_gerais:
+        st.info("Nenhuma análise geral foi realizada ainda.")
+    else:
+        # Cria uma aba para cada análise salva
+        abas_hist = st.tabs([a["nome"] for a in st.session_state.analises_gerais])
+
+        for i, analise in enumerate(st.session_state.analises_gerais):
+            with abas_hist[i]:
+                st.markdown(f"### {analise['nome']}")
+
+                # Arquivo analisado
+                st.markdown(
+                    f"**Arquivo analisado:** {analise.get('arquivo', '(não informado)')}"
+                )
+
+                # Descrição (se houver)
+                if analise.get("descricao"):
+                    st.write(analise["descricao"])
+
+                st.markdown("---")
+
+                # Parâmetros principais
+                params = analise.get("parametros", {})
+                suporte_min = params.get("suporte_min", None)
+                confianca_min = params.get("confianca_min", None)
+                tempos = params.get("tempos", {})
+
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    if suporte_min is not None:
+                        st.markdown(f"**Suporte mínimo:** {suporte_min:.2%}")
+                    else:
+                        st.markdown("**Suporte mínimo:** -")
+                with col2:
+                    if confianca_min is not None:
+                        st.markdown(f"**Confiança mínima:** {confianca_min:.2%}")
+                    else:
+                        st.markdown("**Confiança mínima:** -")
+                with col3:
+                    tempo_total = tempos.get("tempo_total", None)
+                    if tempo_total is not None:
+                        st.markdown(f"**Tempo total:** {tempo_total:.2f} s")
+                    else:
+                        st.markdown("**Tempo total:** -")
+
+                st.markdown("---")
+
+                # Meta-regras usadas na análise
+                st.markdown("**Meta-regras analisadas:**")
+                meta_regras = params.get("meta_regras", [])
+                if meta_regras:
+                    for regra in meta_regras:
+                        st.write(f"• {regra['antecedente']} → {regra['consequente']}")
+                else:
+                    st.write("_Nenhuma meta-regra registrada nesta análise._")
+
+                # Tempos detalhados (se quiser mostrar)
+                if tempos:
+                    st.markdown("---")
+                    st.markdown("**Tempos de execução:**")
+                    if "tempo_regras" in tempos:
+                        st.write(f"- Geração de regras: {tempos['tempo_regras']:.2f} s")
+                    if "tempo_filtro" in tempos:
+                        st.write(f"- Filtragem: {tempos['tempo_filtro']:.2f} s")
+                    if "tempo_graficos" in tempos:
+                        st.write(f"- Geração dos gráficos: {tempos['tempo_graficos']:.2f} s")
+
+                st.markdown("---")
+
+                # Reexibir gráficos salvos
+                st.markdown("### Gráficos da Análise")
+
+                for idx_regra, regra_plotada in enumerate(analise.get("graficos", [])):
+                    st.markdown(f"#### {regra_plotada.get('titulo', 'Regra')}")
+
+                    cols = st.columns(3)
+                    for j, medida in enumerate(["suporte", "confianca", "lift"]):
+                        fig = regra_plotada["figs"].get(medida)
+                        if fig is not None:
+                            with cols[j]:
+                                st.plotly_chart(
+                                    fig,
+                                    use_container_width=True,
+                                    key=f"hist_geral_{i}_{idx_regra}_{medida}"
+                                )
+# ---------- Aba 5: Histórico de Análises Temporais ----------
+elif tab == "Histórico de Análises Temporais":
     st.subheader("Histórico de Análises Temporais")
 
     if "analises_temporais" not in st.session_state or not st.session_state.analises_temporais:
@@ -1190,30 +1343,32 @@ elif tab == "Histórico de Análises":
         for i, analise in enumerate(st.session_state.analises_temporais):
             with abas_hist[i]:
                 st.markdown(f"### {analise['nome']}")
-                st.write(analise["descricao"])
 
+                
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.markdown(f"**Suporte mínimo:** {analise['parametros']['suporte_min']}")
-                with col2:
-                    st.markdown(f"**Confiança mínima:** {analise['parametros']['confianca_min']}")
-                with col3:
+                    # 👇 NOVO: mostrar arquivo analisado
+                    st.markdown(
+                        f"**Arquivo analisado:** {analise.get('arquivo', '(não informado)')}"
+                    )
+
+                    st.write(analise["descricao"])
+                    st.markdown(f"**Suporte mínimo:** {analise['parametros']['suporte_min_temporal']}")
+                    st.markdown(f"**Confiança mínima:** {analise['parametros']['confianca_min_temporal']}")
                     st.markdown(f"**Tipo de particionamento:** {analise['parametros'].get('tipo_particionamento', '-')}")
-                st.markdown("---")
-
-                st.markdown("**Meta-regras analisadas:**")
-                for regra in analise['parametros']['meta_regras']:
-                    st.write(f"• {regra['antecedente']} → {regra['consequente']}")
-
-                st.markdown("---")
-                st.markdown("**Partições geradas:**")
-                #duracao_calculada = ", ".join(partes)
-                #duracao_texto = f" ({duracao_calculada if duracao_calculada else '0 dias'})"
-                for j, p in enumerate(analise['parametros']['particoes']):
-                    if "inicio" in p and "fim" in p:
-                        st.write(f"Intervalo {j+1}: {p['inicio'].date()} → {p['fim'].date()} — {len(p['dados'])} registros")
-                    else:
-                        st.write(f"Intervalo {j+1}: {p['data_min'].date()} → {p['data_max'].date()} — {len(p['dados'])} registros")
+                with col2:
+                    st.markdown("**Meta-regras analisadas:**")
+                    for regra in analise['parametros']['meta_regras']:
+                        st.write(f"• {regra['antecedente']} → {regra['consequente']}")
+                with col3:
+                    st.markdown("**Partições geradas:**")
+                    #duracao_calculada = ", ".join(partes)
+                    #duracao_texto = f" ({duracao_calculada if duracao_calculada else '0 dias'})"
+                    for j, p in enumerate(analise['parametros']['particoes']):
+                        if "inicio" in p and "fim" in p:
+                            st.write(f"Intervalo {j+1}: {p['inicio'].date()} → {p['fim'].date()} — {len(p['dados'])} registros")
+                        else:
+                            st.write(f"Intervalo {j+1}: {p['data_min'].date()} → {p['data_max'].date()} — {len(p['dados'])} registros")
 
                 st.markdown("---")
 
