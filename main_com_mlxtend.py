@@ -11,6 +11,7 @@ from dateutil.relativedelta import relativedelta
 import time
 import plotly.express as px
 import copy
+from decimal import Decimal, ROUND_HALF_UP
 
 st.set_page_config(page_title="Análise Temporal de Regras de Associação", layout="wide")
 
@@ -99,6 +100,9 @@ def numeric_text_input(label, key, value=0.0, min_value=None, max_value=None, de
         return float(s) if s != "" else float(value)
     except Exception:
         return float(value)
+
+def round2(x):
+    return Decimal(str(x)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 # ----------------- Abas -----------------
 # --- MENU LATERAL ---
@@ -535,7 +539,7 @@ elif tab == "Regras Gerais":
             # =============================
             # Etapa 2: Filtragem
             # =============================
-            st.info("🔎 Filtrando regras conforme meta-regras...")
+            st.info("Filtrando regras conforme meta-regras...")
             inicio_filtro = time.time()
 
             base_regra = analysis.filtrar_regras_por_atributo(
@@ -645,6 +649,7 @@ elif tab == "Regras Gerais":
                                     x="antecedente",
                                     y=medida,
                                     text=grupo_cons[medida].apply(lambda x: f"{x:.2f}"),
+                                    #text=grupo_cons[medida].apply(lambda x: f"{round2(x)}"),
                                     title=medida.capitalize(),
                                     category_orders={"antecedente": ordem_labels} if ordem_labels else None
                                 )
@@ -727,7 +732,13 @@ elif tab == "Análise Temporal":
                 col_data = c
                 break
             try:
-                converted = pd.to_datetime(df_original[c], errors='coerce')
+                #converted = pd.to_datetime(df_original[c], errors='coerce')
+                converted = pd.to_datetime(
+                    df_original[c].astype(str).str.strip(),
+                    errors="coerce",
+                    infer_datetime_format=True,
+                    dayfirst=True
+                )
                 if converted.notna().sum() > 0:
                     col_data = c
                     df_original[c] = converted
@@ -763,7 +774,7 @@ elif tab == "Análise Temporal":
             #    ("Marcos temporais", "Mesmo tamanho", "Mesma quantidade de registros"),
             #    horizontal=True
             #)
-            # 🔹 Guarda o tipo de particionamento escolhido para reutilizar depois
+            # Guarda o tipo de particionamento escolhido para reutilizar depois
             #st.session_state.tipo_particionamento = tipo_particionamento
 
             #st.markdown("---")
@@ -868,11 +879,11 @@ elif tab == "Análise Temporal":
                         </style>
                     """, unsafe_allow_html=True)
 
-                    # 🔹 Organização em linha: número | botão | mensagem
+                    # Organização em linha: número | botão | mensagem
                     col_num, col_btn, col_msg = st.columns([2, 1, 2])
 
                     with col_num:
-                        # 🔹 Subdivide a coluna: rótulo | input
+                        # Subdivide a coluna: rótulo | input
                         c_rotulo, c_input = st.columns([1.5, 2])
 
                         with c_rotulo:
@@ -911,7 +922,7 @@ elif tab == "Análise Temporal":
 
                     with col_msg:
                         if "particoes_last_msg" in st.session_state:
-                            st.success(f"✅ {st.session_state.particoes_last_msg}")
+                            st.success(f"{st.session_state.particoes_last_msg}")
 
 
                 # Opção 3: Mesma quantidade de registros
@@ -1021,7 +1032,7 @@ elif tab == "Análise Temporal":
             # --- BLOCO SEPARADO: EXECUTA ANÁLISE TEMPORAL QUANDO A FLAG ESTIVER ATIVA ---
             if st.session_state.get("analise_temporal_em_andamento", False) and not st.session_state.get("analise_temporal_pronta", False):
 
-                st.info("🔍 Iniciando análise temporal das regras...")
+                st.info("Iniciando análise temporal das regras...")
 
                 resultados = []
                 col_data = None
@@ -1067,6 +1078,8 @@ elif tab == "Análise Temporal":
 
                             for i, part in enumerate(st.session_state.particoes_temporais):
                                 df_part = part["dados"].copy()
+                                
+
                                 if df_part.empty:
                                     medidas_particoes.append({"suporte":0, "confianca":0, "lift":0})
                                     continue
@@ -1075,6 +1088,17 @@ elif tab == "Análise Temporal":
                                     df_part = df_part.drop(columns=["data"])
 
                                 df_part_tratado, _, _ = analysis.preparar_dados_para_mineracao_from_df(df_part)
+                                attr_cons, val_cons = cons_val.split("=")
+
+                                if attr_cons in df_part_tratado.columns:
+                                    suporte_consequente = (
+                                        df_part_tratado[attr_cons] == val_cons
+                                    ).mean()
+                                else:
+                                    suporte_consequente = 0
+                                
+                                
+                                
                                 df_regras_part = analysis.gerar_regras_com_mlxtend2(
                                     df_part_tratado,
                                     st.session_state.min_support_temporal,
@@ -1082,7 +1106,8 @@ elif tab == "Análise Temporal":
                                 )
 
                                 if df_regras_part.empty:
-                                    medidas_particoes.append({"suporte":0, "confianca":0, "lift":0})
+                                    medidas_particoes.append({"suporte":0, "confianca":0, "lift":0,
+                                    "sup_consequente": suporte_consequente})
                                     continue
 
                                 df_filtrado_part = df_regras_part[
@@ -1097,7 +1122,9 @@ elif tab == "Análise Temporal":
                                     medidas_particoes.append({
                                         "suporte": row["suporte"],
                                         "confianca": row["confianca"],
-                                        "lift": row["lift"]
+                                        "lift": row["lift"],
+                                        #alter aqui
+                                        "sup_consequente": suporte_consequente
                                     })
 
                             df_medidas = pd.DataFrame(medidas_particoes)
@@ -1139,6 +1166,16 @@ elif tab == "Análise Temporal":
                                         title=medida.capitalize(),
                                     )
 
+                                    if medida == "confianca":
+                                        fig.add_scatter(
+                                            x=df_medidas["Periodo"],
+                                            y=df_medidas["sup_consequente"],
+                                            mode="lines+markers",
+                                            name="Sup. consequente",
+                                            line=dict(color="#E67E22", width=2),
+                                            marker=dict(size=6, color="#E67E22"),
+                                            opacity=0.6
+                                        )
                                     # Linha de referência geral (suave)
                                     y_ref = valores_gerais[medida]
                                     fig.add_hline(
@@ -1156,6 +1193,7 @@ elif tab == "Análise Temporal":
                                     fig.add_annotation(
                                         x=x_final,                # 🔹 depois da última barra
                                         y=y_ref,                  # mesma altura da linha
+                                        #text=f"{round2(y_ref)}",
                                         text=f"{y_ref:.2f}",      # valor formatado
                                         showarrow=False,
                                         font=dict(color="red", size=10),
@@ -1164,20 +1202,59 @@ elif tab == "Análise Temporal":
                                         xshift=10                 # 🔹 desloca levemente para a direita
                                     )
 
-
+                                    if medida == "lift":
+                                        fig.update_traces(
+                                            selector=dict(type="bar"),
+                                            marker_color=cores_fixas[medida],
+                                            texttemplate="%{text}",
+                                            textposition="outside",
+                                            textfont=dict(size=10),
+                                            cliponaxis=False,
+                                            hovertemplate=(
+                                                " <b>%{customdata[0]}</b><br>"
+                                                f"{medida.capitalize()}: <b>%{{y:.2f}}</b><br>"
+                                                "Sup. Consequente: <b>%{customdata[1]:.2f}</b>"
+                                                "<extra></extra>"
+                                            ),
+                                            customdata=df_medidas[["Periodo", "sup_consequente"]]
+                                        )
+                                    else:
+                                        fig.update_traces(
+                                            selector=dict(type="bar"),
+                                            marker_color=cores_fixas[medida],
+                                            texttemplate="%{text}",
+                                            textposition="outside",
+                                            textfont=dict(size=10),
+                                            cliponaxis=False,
+                                            hovertemplate=(
+                                                " <b>%{customdata[0]}</b><br>"
+                                                f"{medida.capitalize()}: <b>%{{y:.2f}}</b>"
+                                                "<extra></extra>"
+                                            ),
+                                            customdata=df_medidas[["Periodo"]]
+                                        )
                                     # Estilo das barras
-                                    fig.update_traces(
-                                        marker_color=cores_fixas[medida],
-                                        texttemplate="%{text}",
-                                        textposition="outside",
-                                        textfont=dict(size=10),
-                                        cliponaxis=False,
-                                        hovertemplate=(
-                                            " <b>%{customdata[0]}</b><br>"  # mostra o período da partição
-                                            f"{medida.capitalize()}: <b>%{{y:.2f}}</b><extra></extra>"
-                                        ),
-                                        customdata=df_medidas[["Periodo"]]  # 🔹 adiciona a coluna extra usada no hover
-                                    )
+                                    #fig.update_traces(
+                                    #    selector=dict(type="bar"),
+                                    #    marker_color=cores_fixas[medida],
+                                    #    texttemplate="%{text}",
+                                    #    textposition="outside",
+                                    #    textfont=dict(size=10),
+                                    #    cliponaxis=False,
+                                        #hovertemplate=(
+                                        #    " <b>%{customdata[0]}</b><br>"  # mostra o período da partição
+                                        #    f"{medida.capitalize()}: <b>%{{y:.2f}}</b><extra></extra>"
+                                        #),
+                                        #customdata=df_medidas[["Periodo"]]  # adiciona a coluna extra usada no hover
+                                    #    hovertemplate=hovertemplate,
+                                        #hovertemplate=(
+                                        #    " <b>%{customdata[0]}</b><br>"
+                                        #    f"{medida.capitalize()}: <b>%{{y:.2f}}</b><br>"
+                                        #    "Sup. Consequente: <b>%{customdata[1]:.2f}</b>"
+                                        #    "<extra></extra>"
+                                        #),
+                                        #customdata=df_medidas[["Periodo", "sup_consequente"]]
+                                    #)
 
                                     # Layout e formatação geral
                                     fig.update_layout(
@@ -1189,22 +1266,29 @@ elif tab == "Análise Temporal":
                                             xanchor="center",
                                             font=dict(size=14, color="#333", family="Arial", weight="normal")
                                         ),
-                                        xaxis=dict(
+                                        legend=dict(                 
+                                            orientation="h",
+                                            yanchor="bottom",
+                                            y=1.02,
+                                            xanchor="left",
+                                            x=0.5
+                                        ),
+                                         xaxis=dict(
                                             tickangle=45,
                                             title=None,
                                             tickfont=dict(size=10),
-                                            showgrid=False   # ❌ remove grade vertical
-                                            #zeroline=False    # ❌ remove linha zero
+                                            showgrid=False   #  remove grade vertical
+                                            #zeroline=False    #  remove linha zero
                                         ),
                                         yaxis=dict(
                                             title=None,
                                             tickfont=dict(size=10),
-                                            showgrid=False   # ❌ remove grade horizontal
-                                            #zeroline=False    # ❌ remove linha zero
+                                            showgrid=False   #  remove grade horizontal
+                                            #zeroline=False    #  remove linha zero
                                         ),
                                         plot_bgcolor="white",
                                         paper_bgcolor="white",
-                                        showlegend=False
+                                        showlegend=True
                                     )
 
                                     st.plotly_chart(
