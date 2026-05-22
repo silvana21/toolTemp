@@ -5,6 +5,7 @@ import analysis
 from mlxtend.frequent_patterns import apriori, association_rules
 from collections import Counter
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 from streamlit_option_menu import option_menu
 import re
 from dateutil.relativedelta import relativedelta
@@ -12,6 +13,7 @@ import time
 import plotly.express as px
 import copy
 from decimal import Decimal, ROUND_HALF_UP
+from datetime import timedelta
 
 st.set_page_config(page_title="Análise Temporal de Regras de Associação", layout="wide")
 
@@ -162,9 +164,40 @@ if tab == "Carregar CSV":
     # 2) Renderiza SEMPRE que houver dados no estado (mesmo sem upload nesta reexecução)
     if st.session_state.get("dados_processados") is not None:
         df_proc = st.session_state.dados_processados
+
+        # =====================================
+        # Recupera coluna temporal do dataset original
+        # =====================================
+        df_original = st.session_state.dados_original
+
+        col_data = None
+
+        for coluna in df_original.columns:
+
+            if df_original[coluna].dtype == 'object':
+
+                # tentativa com formato conhecido
+                converted = pd.to_datetime(
+                    df_original[coluna],
+                    format='%Y-%m-%d %H:%M:%S',
+                    errors='coerce'
+                )
+
+                taxa_validos = converted.notna().sum() / len(df_original)
+
+                # fallback controlado (sem warning)
+                if taxa_validos < 0.5:
+                    continue
+
+                if taxa_validos > 0.9:
+                    col_data = coluna
+                    df_original[coluna] = converted
+                    break
+        st.session_state["coluna_data"] = col_data
+
         atributos_remover = st.session_state.get("atributos_removidos", [])
 
-        # garante que temos os resumos (se não houver por algum motivo, gera agora)
+        # garante que tem os resumos (se não houver por algum motivo, gera agora)
         if "resumo_colunas" not in st.session_state or not st.session_state["resumo_colunas"]:
             st.session_state["resumo_colunas"] = {
                 col: df_proc[col].value_counts(dropna=False).head(10)
@@ -189,7 +222,7 @@ if tab == "Carregar CSV":
             st.session_state["ordem_valores"] = {}
 
         # ====================================================
-        # 1️⃣ PRIMEIRO LOOP → apenas interfaces de ordenação
+        # PRIMEIRO LOOP → apenas interfaces de ordenação
         # ====================================================
         st.markdown("### Defina a ordem de exibição dos valores")
         try:
@@ -246,7 +279,7 @@ if tab == "Carregar CSV":
         st.markdown("---")  # separador visual antes dos gráficos
 
         # ====================================================
-        # 2️⃣ SEGUNDO LOOP → gera os gráficos com base nas ordens
+        # SEGUNDO LOOP → gera os gráficos com base nas ordens
         # ====================================================
         st.subheader("Resumo dos Atributos (valores e frequência)")
 
@@ -272,7 +305,7 @@ if tab == "Carregar CSV":
                 text="frequencia",
                 color_discrete_sequence=["#4A90E2"],  # tom padrão
                 height=220,
-                orientation="h"  # 👈 barra horizontal
+                orientation="h"  # barra horizontal
             )
 
             # ===== Hover customizado =====
@@ -309,6 +342,110 @@ if tab == "Carregar CSV":
                 )
                 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
             
+                
+                # ===============================
+                # Evolução temporal do atributo
+                # ===============================
+                col_data = st.session_state.get("coluna_data")
+                #st.write(
+                #    "DEBUG → atributo:",
+                #    col,
+                #    "| coluna_data:",
+                #    col_data,
+                #    "| existe coluna?",
+                #    col_data in df_original.columns if col_data else False
+                #)
+
+                if (
+                    "coluna_data" in st.session_state
+                    and st.session_state["coluna_data"] in df_original.columns
+                ):
+                    st.session_state["coluna_data"] = col_data
+                    top_valores = value_counts.index.tolist()
+
+                    evolucao = analysis.gerar_evolucao_temporal(
+                        df_original,
+                        col_data,
+                        col,
+                        top_valores,
+                        freq="Q"   # trimestral
+                    )
+                    #st.write("DEBUG evolução:", col, "→ linhas:", len(evolucao))
+                    if not evolucao.empty:
+                        data_inicio = evolucao[col_data].min()
+                        data_fim = evolucao[col_data].max()
+
+                        # traduz agregação
+                        map_freq = {
+                            "D": "Daily",
+                            "W": "Weekly",
+                            "M": "Monthly",
+                            "Q": "Quarterly",
+                            "Y": "Yearly"
+                        }
+
+                        freq_label = map_freq.get("Q", "Temporal")  # use sua variável freq aqui
+
+                        periodo_texto = (
+                            f"{freq_label} from "
+                            f"{data_inicio.strftime('%d %b %Y')} "
+                            f"to {data_fim.strftime('%d %b %Y')}"
+                        )
+                        fig_time = px.bar(
+                            evolucao,
+                            x=col_data,
+                            y="count",
+                            color=col,
+                            height=220,
+                            custom_data=["periodo_label"]
+                        )
+                        
+                        fig_time.update_layout(
+                            title=dict(
+                                text=(
+                                    f"{col} over time"
+                                    f"<br><sup style='color:#6e7781; font-size:12px; font-weight:normal;'>"
+                                    f"{periodo_texto}</sup>"
+                                ),
+                                x=0.1,
+                                xanchor="left",
+                                font=dict(size=16)
+                            ),
+                            margin=dict(l=40, r=20, t=90, b=10),
+                            xaxis_title="",
+                            yaxis_title="",
+                            legend_title="",
+                            plot_bgcolor="rgba(0,0,0,0)",
+                            paper_bgcolor="rgba(0,0,0,0)",
+                            barmode="group",
+                            xaxis=dict(
+                                rangeslider=dict( #mini-gráfico inferior
+                                    visible=True,
+                                    thickness=0.12
+                                ),
+                                type="date",
+                                dtick="M24",       # ← intervalo de 2 anos
+                                tickformat="%Y",   # mostra só o ano
+                                ticklabelmode="period",
+                                
+                            )
+                        )
+
+                        fig_time.update_traces(
+                            hovertemplate=(
+                                "Período: %{customdata[0]}<br>"
+                                "Valor: %{fullData.name}<br>"
+                                "Quantidade: %{y}<extra></extra>"
+                            )
+                        )
+
+                        st.plotly_chart(
+                            fig_time,
+                            use_container_width=True,
+                            config={"displayModeBar": False}
+                        )
+            
+
             col_index += 1
             if col_index == 2:
                 st.markdown(
@@ -727,24 +864,26 @@ elif tab == "Análise Temporal":
 
         # Detectar coluna de data
         col_data = None
+
         for c in df_original.columns:
+            # NOVO: detectar se já é datetime
             if pd.api.types.is_datetime64_any_dtype(df_original[c]):
                 col_data = c
                 break
-            try:
-                #converted = pd.to_datetime(df_original[c], errors='coerce')
+
+            if df_original[c].dtype == 'object':
+                serie = df_original[c].astype(str).str.strip()
                 converted = pd.to_datetime(
-                    df_original[c].astype(str).str.strip(),
-                    errors="coerce",
-                    infer_datetime_format=True,
-                    dayfirst=True
+                    serie,
+                    errors='coerce'
                 )
-                if converted.notna().sum() > 0:
+
+                taxa_validos = converted.notna().sum() / len(df_original)
+
+                if taxa_validos > 0.7:
                     col_data = c
                     df_original[c] = converted
                     break
-            except Exception:
-                continue
 
         if col_data is None:
             st.error("Não foi possível detectar uma coluna de data na base.")
@@ -837,7 +976,7 @@ elif tab == "Análise Temporal":
                         elif col_data is None:
                             st.error("Não foi possível detectar uma coluna de data para particionar.")
                         else:
-                            # aqui usamos o df_original e col_data já detectados lá em cima 👇
+                            # aqui uso o df_original e col_data já detectados lá em cima
                             marcos = [pd.to_datetime(m) for m in sorted(st.session_state.marcos_temporais)]
                             data_min = df_original[col_data].min()
                             data_max = df_original[col_data].max()
@@ -846,15 +985,23 @@ elif tab == "Análise Temporal":
                             particoes = []
                             for i in range(len(limites) - 1):
                                 inicio = limites[i]
-                                fim = limites[i + 1]
-                                if i > 0:
-                                    inicio += pd.Timedelta(days=1)
-                                part = df_original[
-                                    (df_original[col_data] >= inicio) &
-                                    (df_original[col_data] <= fim)
-                                ].copy()
-                                particoes.append({"inicio": inicio, "fim": fim, "dados": part})
+                                limite_superior  = limites[i + 1]
+                                if i < len(limites) - 2:
+                                    # partições normais: [inicio, fim)
+                                    part = df_original[
+                                        (df_original[col_data] >= inicio) &
+                                        (df_original[col_data] < limite_superior)
+                                    ].copy()
+                                    fim_real = part[col_data].max() if not part.empty else inicio
 
+                                else:
+                                    # última partição: [inicio, fim]
+                                    part = df_original[
+                                        (df_original[col_data] >= inicio) &
+                                        (df_original[col_data] <= limite_superior)
+                                    ].copy()
+                                    fim_real = limite_superior
+                                particoes.append({"inicio": inicio, "fim": fim_real, "dados": part})
                             st.session_state.particoes_temporais = particoes
                             st.session_state.analise_temporal_em_andamento = False
                             st.session_state.analise_temporal_pronta = False
@@ -971,8 +1118,13 @@ elif tab == "Análise Temporal":
                         data_ini, data_fim = p["data_min"], p["data_max"]
 
                     duracao_texto = ""
-                    #if tipo == "Mesmo tamanho temporal":
-                    delta = relativedelta(data_fim, data_ini)
+                    # Ajusta fim apenas para exibição (exceto última partição)
+                    #if i < len(st.session_state.particoes_temporais) - 1:
+                    #    data_fim_exibicao = data_fim - pd.Timedelta(days=1)
+                    #else:
+                    data_fim_exibicao = data_fim
+
+                    delta = relativedelta(data_fim_exibicao, data_ini)
                     partes = []
                     if delta.years > 0:
                         partes.append(f"{delta.years} ano{'s' if delta.years > 1 else ''}")
@@ -983,9 +1135,9 @@ elif tab == "Análise Temporal":
                     
                     duracao_calculada = ", ".join(partes)
                     duracao_texto = f" ({duracao_calculada if duracao_calculada else '0 dias'})"
-
+                    
                     st.write(
-                        f"Intervalo {i+1}: **{data_ini.strftime('%d/%m/%Y')}** → **{data_fim.strftime('%d/%m/%Y')}** — "
+                        f"Intervalo {i+1}: **{data_ini.strftime('%d/%m/%Y')}** → **{data_fim_exibicao.strftime('%d/%m/%Y')}** — "
                         f"{len(p['dados'])} registros {duracao_texto}"
                     )
 
@@ -1032,7 +1184,29 @@ elif tab == "Análise Temporal":
             # --- BLOCO SEPARADO: EXECUTA ANÁLISE TEMPORAL QUANDO A FLAG ESTIVER ATIVA ---
             if st.session_state.get("analise_temporal_em_andamento", False) and not st.session_state.get("analise_temporal_pronta", False):
 
-                st.info("Iniciando análise temporal das regras...")
+                # ======================================
+                # ATRIBUTOS ENVOLVIDOS NAS REGRAS (CORRETO)
+                # ======================================
+
+                atributos_regras = set()
+
+                df_regras_base = st.session_state.get("base_regra")
+
+                if df_regras_base is None or df_regras_base.empty:
+                    st.info("Aguardando regras serem geradas...")
+                else:
+
+                    for ant in df_regras_base["antecedente"].unique():
+                        if "=" in ant:
+                            atributos_regras.add(ant.split("=", 1)[0])
+
+                    for cons in df_regras_base["consequente"].unique():
+                        if "=" in cons:
+                            atributos_regras.add(cons.split("=", 1)[0])
+
+                atributos_regras = list(atributos_regras)
+
+                                
 
                 resultados = []
                 col_data = None
@@ -1053,8 +1227,134 @@ elif tab == "Análise Temporal":
                 }
 
 
+                def gerar_grafico_atributo(atributo, valor, particoes, df_geral):
+                    
+                    if atributo in df_geral.columns:
+                        serie_geral = df_geral[atributo]
+                        mask_geral = serie_geral.notna() & (serie_geral.astype(str) == valor)
+
+                        suporte_geral = mask_geral.sum() / len(serie_geral) if len(serie_geral) > 0 else 0
+                    else:
+                        suporte_geral = 0
+
+                    resultados_attr = []
+
+                    for part in particoes:
+
+                        df_part = part["dados"]
+
+                        if df_part.empty or atributo not in df_part.columns:
+                            continue
+
+                        serie = df_part[atributo]
+
+                        mask = serie.notna() & (serie.astype(str) == valor)
+
+                        quantidade = mask.sum()
+                        total = len(serie)
+
+                        proporcao = quantidade / total if total > 0 else 0
+
+                        if "inicio" in part:
+                            periodo = (
+                                f"{part['inicio'].strftime('%d/%m/%Y')} → "
+                                f"{part['fim'].strftime('%d/%m/%Y')}"
+                            )
+                        else:
+                            periodo = (
+                                f"{part['data_min'].strftime('%d/%m/%Y')} → "
+                                f"{part['data_max'].strftime('%d/%m/%Y')}"
+                            )
+
+                        resultados_attr.append({
+                            "Periodo": periodo,
+                            "proporcao": proporcao,
+                            "quantidade": quantidade,
+                            atributo: f"{atributo}={valor}"
+                        })
+
+                    if not resultados_attr:
+                        return None
+
+                    df_plot = pd.DataFrame(resultados_attr)
+                    customdata_hover = df_plot[
+                        ["Periodo", "proporcao", "quantidade"]
+                    ]
+                    fig = px.bar(
+                        df_plot,
+                        x="Periodo",
+                        y="proporcao",
+                        text=df_plot["proporcao"].map(lambda v: f"{v:.2f}"),
+                        color_discrete_sequence=["skyblue"],
+                    )
+                    x_vals = df_plot["Periodo"].tolist()
+
+                    fig.add_shape(
+                        type="line",
+                        x0=0,
+                        x1=1,
+                        xref="paper",   
+                        y0=suporte_geral,
+                        y1=suporte_geral,
+                        line=dict(color="rgba(255,0,0,0.6)", width=1.2, dash="dot")
+                    )
+                    fig.add_annotation(
+                        x=1,                     
+                        xref="paper",            
+                        y=suporte_geral,
+                        text=f"{suporte_geral:.2f}",
+                        showarrow=False,
+                        font=dict(color="red", size=10),
+                        xanchor="left",
+                        yanchor="bottom",
+                        xshift=5
+                    )
+                    fig.update_traces(
+                        textposition="outside",
+                        customdata=customdata_hover,
+                        hovertemplate=(
+                            "<b>%{customdata[0]}</b><br>"
+                            "Suporte do atributo: <b>%{customdata[1]:.2f}</b><br>"
+                            "Quantidade: <b>%{customdata[2]}</b>"
+                            "<extra></extra>"
+                        )
+                    )
+
+                    # gráfico pequeno 
+                    fig.update_layout(
+                        height=300,
+                        margin=dict(l=10, r=10, t=80, b=30),
+                        showlegend=False,
+                        plot_bgcolor="white",
+                        paper_bgcolor="white",
+                        xaxis_tickangle=45,
+                        title=dict(
+                            text=f"{atributo}={valor}",
+                            x=0.5,
+                            xanchor="center",
+                            font=dict(
+                                size=13,
+                                color="#333",
+                                family="Arial",
+                                weight="normal"   # ← remove negrito
+                            )
+                        ),
+                        yaxis=dict(
+                            title="Suporte",
+                            range=[0, 1.2],
+                            showgrid=False
+                        ),
+                        xaxis_title=None,
+                        uniformtext_minsize=8,
+                        uniformtext_mode="hide",
+                    )
+                    #fig.update_yaxes(automargin=True)
+
+                    return fig
+
+
                 # === Análise Temporal das Regras ===
-                for regra_user in st.session_state.regras:
+                for idx_regra, regra_user in enumerate(st.session_state.regras):
                     ant_attr = regra_user["antecedente"]
                     cons_attr = regra_user["consequente"]
 
@@ -1065,14 +1365,24 @@ elif tab == "Análise Temporal":
                     if base_geral_filtrada.empty:
                         st.warning(f"Nenhuma regra encontrada na base geral para {ant_attr} → {cons_attr}")
                         continue
-
+                    def safe_key(text):
+                        return (
+                            str(text)
+                            .replace(" ", "_")
+                            .replace("=", "_")
+                            .replace(">", "")
+                            .replace("<", "")
+                        )
                     for ant_val, grupo_ant in base_geral_filtrada.groupby("antecedente"):
                         for cons_val, grupo_cons_geral in grupo_ant.groupby("consequente"):
                             st.markdown(
                                 f"<h5 style='text-align:center; color:#222; margin-top:10px; margin-bottom:4px;'>"
-                                f"{ant_val} → {cons_val}</h5>",
+                                f"Regra: {ant_val} → {cons_val}</h5>",
                                 unsafe_allow_html=True
                             )
+                            combo_id = f"{idx_regra}_{ant_val}_{cons_val}"
+                            
+
 
                             medidas_particoes = []
 
@@ -1084,8 +1394,11 @@ elif tab == "Análise Temporal":
                                     medidas_particoes.append({"suporte":0, "confianca":0, "lift":0})
                                     continue
 
-                                if "data" in df_part.columns:
-                                    df_part = df_part.drop(columns=["data"])
+                                #if "data" in df_part.columns:
+                                #    df_part = df_part.drop(columns=["data"])
+
+                                if col_data in df_part.columns:
+                                    df_part = df_part.drop(columns=[col_data])
 
                                 df_part_tratado, _, _ = analysis.preparar_dados_para_mineracao_from_df(df_part)
                                 attr_cons, val_cons = cons_val.split("=")
@@ -1166,16 +1479,16 @@ elif tab == "Análise Temporal":
                                         title=medida.capitalize(),
                                     )
 
-                                    if medida == "confianca":
-                                        fig.add_scatter(
-                                            x=df_medidas["Periodo"],
-                                            y=df_medidas["sup_consequente"],
-                                            mode="lines+markers",
-                                            name="Sup. consequente",
-                                            line=dict(color="#E67E22", width=2),
-                                            marker=dict(size=6, color="#E67E22"),
-                                            opacity=0.6
-                                        )
+                                    #if medida == "confianca":
+                                    #    fig.add_scatter(
+                                    #        x=df_medidas["Periodo"],
+                                    #        y=df_medidas["sup_consequente"],
+                                    #        mode="lines+markers",
+                                    #        name="Sup. consequente",
+                                    #        line=dict(color="#E67E22", width=2),
+                                    #        marker=dict(size=6, color="#E67E22"),
+                                    #        opacity=0.6
+                                    #    )
                                     # Linha de referência geral (suave)
                                     y_ref = valores_gerais[medida]
                                     fig.add_hline(
@@ -1191,70 +1504,54 @@ elif tab == "Análise Temporal":
 
                                     # Adiciona o valor da linha ao final dela
                                     fig.add_annotation(
-                                        x=x_final,                # 🔹 depois da última barra
+                                        x=x_final,                # depois da última barra
                                         y=y_ref,                  # mesma altura da linha
                                         #text=f"{round2(y_ref)}",
                                         text=f"{y_ref:.2f}",      # valor formatado
                                         showarrow=False,
                                         font=dict(color="red", size=10),
-                                        xanchor="left",           # 🔹 texto “depois” da linha
+                                        xanchor="left",           # texto “depois” da linha
                                         yanchor="bottom",
-                                        xshift=10                 # 🔹 desloca levemente para a direita
+                                        xshift=10                 # desloca levemente para a direita
                                     )
 
-                                    if medida == "lift":
-                                        fig.update_traces(
-                                            selector=dict(type="bar"),
-                                            marker_color=cores_fixas[medida],
-                                            texttemplate="%{text}",
-                                            textposition="outside",
-                                            textfont=dict(size=10),
-                                            cliponaxis=False,
-                                            hovertemplate=(
-                                                " <b>%{customdata[0]}</b><br>"
-                                                f"{medida.capitalize()}: <b>%{{y:.2f}}</b><br>"
-                                                "Sup. Consequente: <b>%{customdata[1]:.2f}</b>"
-                                                "<extra></extra>"
-                                            ),
-                                            customdata=df_medidas[["Periodo", "sup_consequente"]]
-                                        )
-                                    else:
-                                        fig.update_traces(
-                                            selector=dict(type="bar"),
-                                            marker_color=cores_fixas[medida],
-                                            texttemplate="%{text}",
-                                            textposition="outside",
-                                            textfont=dict(size=10),
-                                            cliponaxis=False,
-                                            hovertemplate=(
-                                                " <b>%{customdata[0]}</b><br>"
-                                                f"{medida.capitalize()}: <b>%{{y:.2f}}</b>"
-                                                "<extra></extra>"
-                                            ),
-                                            customdata=df_medidas[["Periodo"]]
-                                        )
-                                    # Estilo das barras
-                                    #fig.update_traces(
-                                    #    selector=dict(type="bar"),
-                                    #    marker_color=cores_fixas[medida],
-                                    #    texttemplate="%{text}",
-                                    #    textposition="outside",
-                                    #    textfont=dict(size=10),
-                                    #    cliponaxis=False,
-                                        #hovertemplate=(
-                                        #    " <b>%{customdata[0]}</b><br>"  # mostra o período da partição
-                                        #    f"{medida.capitalize()}: <b>%{{y:.2f}}</b><extra></extra>"
-                                        #),
-                                        #customdata=df_medidas[["Periodo"]]  # adiciona a coluna extra usada no hover
-                                    #    hovertemplate=hovertemplate,
-                                        #hovertemplate=(
-                                        #    " <b>%{customdata[0]}</b><br>"
-                                        #    f"{medida.capitalize()}: <b>%{{y:.2f}}</b><br>"
-                                        #    "Sup. Consequente: <b>%{customdata[1]:.2f}</b>"
-                                        #    "<extra></extra>"
-                                        #),
+                                    #if medida == "lift":
+                                    fig.update_traces(
+                                        selector=dict(type="bar"),
+                                        marker_color=cores_fixas[medida],
+                                        texttemplate="%{text}",
+                                        textposition="outside",
+                                        textfont=dict(size=10),
+                                        cliponaxis=False,
+                                        hovertemplate=(
+                                            " <b>%{customdata[0]}</b><br>"
+                                            "Suporte: <b>%{customdata[1]:.2f}</b><br>"
+                                            "Confiança: <b>%{customdata[2]:.2f}</b><br>"
+                                            "Lift: <b>%{customdata[3]:.2f}</b><br>"
+                                            "Sup. Consequente: <b>%{customdata[4]:.2f}</b>"
+                                            "<extra></extra>"
+                                        ),
                                         #customdata=df_medidas[["Periodo", "sup_consequente"]]
-                                    #)
+                                        customdata=df_medidas[
+                                            ["Periodo", "suporte", "confianca", "lift", "sup_consequente"]
+                                        ]
+                                    )
+                                    #else:
+                                    #    fig.update_traces(
+                                    #        selector=dict(type="bar"),
+                                    #        marker_color=cores_fixas[medida],
+                                    #        texttemplate="%{text}",
+                                    #        textposition="outside",
+                                    #        textfont=dict(size=10),
+                                    #        cliponaxis=False,
+                                    #        hovertemplate=(
+                                    #            " <b>%{customdata[0]}</b><br>"
+                                    #            f"{medida.capitalize()}: <b>%{{y:.2f}}</b>"
+                                    #            "<extra></extra>"
+                                    #        ),
+                                    #        customdata=df_medidas[["Periodo"]]
+                                    #    )
+                                    
 
                                     # Layout e formatação geral
                                     fig.update_layout(
@@ -1308,6 +1605,51 @@ elif tab == "Análise Temporal":
                                             "figs": figs_regra  # conjunto dos três gráficos
                                         })
                                         regras_plotadas += 1
+                            # ======================================
+                            # GRÁFICOS DOS ATRIBUTOS DA REGRA
+                            # ======================================
+
+                            st.markdown(
+                                """
+                                <h6 style='text-align:center; margin-top:15px; margin-bottom:5px; color:#444;'>
+                                    Suporte Temporal do Antecedente e Consequente
+                                </h6>
+                                """,
+                                unsafe_allow_html=True
+                            )
+                            col_attr1, col_attr2, col_attr3 = st.columns(3)
+                            
+                            # separa atributo e valor da regra
+                            attr_ant, val_ant = ant_val.split("=")
+                            attr_cons, val_cons = cons_val.split("=")
+
+                            with col_attr1:
+                                fig_attr = gerar_grafico_atributo(
+                                    attr_ant,
+                                    val_ant,
+                                    st.session_state.particoes_temporais,
+                                    df_original
+                                )
+                                if fig_attr:
+                                    st.plotly_chart(
+                                        fig_attr,
+                                        use_container_width=True,
+                                        key=f"attr_ant_{safe_key(combo_id)}"
+                                    )
+
+                            with col_attr3:
+                                fig_attr = gerar_grafico_atributo(
+                                    attr_cons,
+                                    val_cons,
+                                    st.session_state.particoes_temporais,
+                                    df_original
+                                )
+                                if fig_attr:
+                                    st.plotly_chart(
+                                        fig_attr,
+                                        use_container_width=True,
+                                        key=f"attr_cons_{safe_key(combo_id)}"
+                                    )
                 nome_arquivo_atual = st.session_state.get("arquivo_carregado", "(arquivo não registrado)")
                 nome_analise = f"Análise {len(st.session_state.analises_temporais) + 1}"
                 analise_atual["nome"] = nome_analise
@@ -1448,6 +1790,7 @@ elif tab == "Histórico de Análises Temporais":
                     st.markdown("**Partições geradas:**")
                     #duracao_calculada = ", ".join(partes)
                     #duracao_texto = f" ({duracao_calculada if duracao_calculada else '0 dias'})"
+                    
                     for j, p in enumerate(analise['parametros']['particoes']):
                         if "inicio" in p and "fim" in p:
                             st.write(f"Intervalo {j+1}: {p['inicio'].date()} → {p['fim'].date()} — {len(p['dados'])} registros")

@@ -25,13 +25,28 @@ def preparar_dados_para_mineracao_from_df(df_original):
             atributos_numericos.append(coluna)
         # detectar data (conversão com maioria dos valores válidos)
         else:
-            try:
-                converted = pd.to_datetime(df[coluna], errors='coerce', format=None)
-                if converted.notna().sum() > len(df) * 0.9:
-                    atributos_de_data.append(coluna)
-            except Exception:
-                pass
+            if df[coluna].dtype == 'object':
 
+                # tentativa 1: formato conhecido
+                converted = pd.to_datetime(
+                    df[coluna],
+                    format='%Y-%m-%d %H:%M:%S',
+                    errors='coerce'
+                )
+
+                taxa_validos = converted.notna().sum() / len(df)
+
+                # fallback: tenta sem formato se falhou muito
+                if taxa_validos < 0.5:
+                    converted = pd.to_datetime(
+                        df[coluna],
+                        errors='coerce'
+                    )
+                    taxa_validos = converted.notna().sum() / len(df)
+
+                if taxa_validos > 0.9:
+                    atributos_de_data.append(coluna)
+    #df[coluna] = converted
     atributos_remover = atributos_numericos + atributos_de_data
     dados_removidos = df[atributos_remover].copy()
     df_discretizado = df.drop(columns=atributos_remover)
@@ -39,7 +54,7 @@ def preparar_dados_para_mineracao_from_df(df_original):
     # Converte booleanos para str para evitar problemas no OHE
     for col in df_discretizado.select_dtypes(include=['bool']).columns:
         df_discretizado[col] = df_discretizado[col].astype(str)
-
+    #print("Colunas detectadas como data:", atributos_de_data)
     return df_discretizado, dados_removidos, atributos_remover
 
 
@@ -938,3 +953,61 @@ def particionar_por_tempo_equal_length(df, col_data, n_particoes):
         inicio = fim
 
     return particoes
+
+
+def gerar_evolucao_temporal(df, coluna_data, atributo, top_valores, freq="M"):
+    """
+    Gera evolução temporal dos valores mais frequentes do atributo.
+    """
+    df = df.copy()
+
+    # padroniza comparação
+    df[atributo] = df[atributo].astype(str)
+    top_valores = [str(v) for v in top_valores]
+
+    if coluna_data not in df.columns:
+        return pd.DataFrame()
+
+    df_temp = df[[coluna_data, atributo]].copy()
+
+    # GARANTE datetime (CORREÇÃO PRINCIPAL)
+    df_temp[coluna_data] = pd.to_datetime(
+        df_temp[coluna_data],
+        errors="coerce"
+    )
+
+    df_temp = df_temp.dropna(subset=[coluna_data, atributo])
+
+    # mantém apenas valores exibidos no gráfico de frequência
+    df_temp = df_temp[df_temp[atributo].isin(top_valores)]
+
+    if df_temp.empty:
+        return pd.DataFrame()
+
+    # índice temporal válido
+    df_temp = df_temp.set_index(coluna_data)
+
+    evolucao = (
+        df_temp
+        .groupby([pd.Grouper(freq=freq), atributo])
+        .size()
+        .reset_index(name="count")
+    )
+    trimestres = {
+        1: "Jan–Mar",
+        2: "Apr–Jun",
+        3: "Jul–Sep",
+        4: "Oct–Dec",
+    }
+
+    periodos = evolucao[coluna_data].dt.to_period("Q")
+
+    evolucao["periodo_label"] = (
+        periodos.dt.quarter.map(trimestres)
+        + " "
+        + periodos.dt.year.astype(str)
+    )
+    #print(df[atributo].unique()[:10])
+    #print(top_valores[:10])
+
+    return evolucao
