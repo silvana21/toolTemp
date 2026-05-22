@@ -61,15 +61,15 @@ Instalação
 
 Clone o repositório:
 
-git clone https://github.com/silvana21/toolTemp.git
+```git clone https://github.com/silvana21/toolTemp.git```
 
 Acesse a pasta do projeto:
 
-cd SEU-REPOSITORIO
+```cd SEU-REPOSITORIO```
 
 Instale as dependências:
 
-pip install -r requirements.txt
+```pip install -r requirements.txt```
 
 Execução
 
@@ -87,11 +87,11 @@ Exemplos de Uso
 
 A ferramenta pode ser utilizada em cenários como:
 
-análise temporal de aceitação de pull requests;
-investigação de padrões de contribuição;
-estudos sobre evolução de práticas colaborativas;
-mineração de repositórios de software;
-estudos empíricos em Engenharia de Software.
+- análise temporal de aceitação de pull requests;
+- investigação de padrões de contribuição;
+- estudos sobre evolução de práticas colaborativas;
+- mineração de repositórios de software;
+
 Licença
 
 Este projeto está licenciado sob a licença MIT.
@@ -100,3 +100,4 @@ Contato
 
 Silvana de Andrade Gonçalves
 Universidade Federal Fluminense (UFF)
+Instituto Federal do Acre (IFAC)
