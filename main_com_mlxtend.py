@@ -17,8 +17,6 @@ from datetime import timedelta
 
 st.set_page_config(page_title="Análise Temporal de Regras de Associação", layout="wide")
 
-#st.title("Análise Temporal de Regras de Associação")
-
 # ---------- Session state ----------
 def _init_state():
     defaults = {
@@ -90,7 +88,6 @@ def numeric_text_input(label, key, value=0.0, min_value=None, max_value=None, de
     # cria o text_input que dispara _sanitize_input ao alterar (quando o widget perde foco / Enter)
     st.text_input(
         label,
-        #value=st.session_state[key],
         key=key,
         on_change=_sanitize_input,
         args=(key, min_value, max_value, decimals)
@@ -215,8 +212,6 @@ if tab == "Carregar CSV":
         else:
             st.info("Nenhum atributo de data/numérico foi removido.")
 
-        
-
         # --- guarda ordens personalizadas por atributo ---
         if "ordem_valores" not in st.session_state:
             st.session_state["ordem_valores"] = {}
@@ -241,22 +236,22 @@ if tab == "Carregar CSV":
                 if usa_dragdrop:
                     st.caption(f"Defina a ordem de exibição para **{col}** (arraste para reorganizar)")
 
-                    # 🔹 Recupera a ordem salva anteriormente, se existir
+                    # Recupera a ordem salva anteriormente, se existir
                     ordem_salva = st.session_state["ordem_valores"].get(col, lista_valores)
 
-                    # 🔹 Garante que os itens que sumiram (novos valores, etc.) ainda apareçam
+                    # Garante que os itens que sumiram (novos valores, etc.) ainda apareçam
                     for item in lista_valores:
                         if item not in ordem_salva:
                             ordem_salva.append(item)
 
-                    # 🔹 Mostra o componente já com a ordem salva
+                    # Mostra o componente já com a ordem salva
                     ordem_escolhida = sort_items(
                         items=ordem_salva,
                         direction="vertical",
                         key=f"sort_{col}"
                     )
 
-                    # 🔹 Se o usuário não interagiu (ordem_escolhida vazia), mantém a salva
+                    # Se o usuário não interagiu (ordem_escolhida vazia), mantém a salva
                     if not ordem_escolhida:
                         ordem_escolhida = ordem_salva
                 else:
@@ -347,14 +342,7 @@ if tab == "Carregar CSV":
                 # Evolução temporal do atributo
                 # ===============================
                 col_data = st.session_state.get("coluna_data")
-                #st.write(
-                #    "DEBUG → atributo:",
-                #    col,
-                #    "| coluna_data:",
-                #    col_data,
-                #    "| existe coluna?",
-                #    col_data in df_original.columns if col_data else False
-                #)
+                
 
                 if (
                     "coluna_data" in st.session_state
@@ -786,7 +774,6 @@ elif tab == "Regras Gerais":
                                     x="antecedente",
                                     y=medida,
                                     text=grupo_cons[medida].apply(lambda x: f"{x:.2f}"),
-                                    #text=grupo_cons[medida].apply(lambda x: f"{round2(x)}"),
                                     title=medida.capitalize(),
                                     category_orders={"antecedente": ordem_labels} if ordem_labels else None
                                 )
@@ -906,17 +893,6 @@ elif tab == "Análise Temporal":
 
             st.markdown("---")
             
-            #st.subheader("Tipo de particionamento")
-            #Novo seletor de tipo de particionamento
-            #tipo_particionamento = st.radio(
-            #    "",
-            #    ("Marcos temporais", "Mesmo tamanho", "Mesma quantidade de registros"),
-            #    horizontal=True
-            #)
-            # Guarda o tipo de particionamento escolhido para reutilizar depois
-            #st.session_state.tipo_particionamento = tipo_particionamento
-
-            #st.markdown("---")
             # ======================================
             # SEÇÃO DE PARTICIONAMENTO REESTILIZADA
             # ======================================
@@ -1016,7 +992,7 @@ elif tab == "Análise Temporal":
                 # Opção 2: Mesmo tamanho
                 elif tipo_particionamento == "Mesmo tamanho temporal":
 
-                    # 🔧 CSS: deixa o number_input mais compacto, MAS preservando os botões +/-
+                    # CSS: deixa o number_input mais compacto, MAS preservando os botões +/-
                     st.markdown("""
                         <style>
                         /* A caixa externa continua grande o suficiente para os botões */
@@ -1174,19 +1150,13 @@ elif tab == "Análise Temporal":
                 #colunas = list(st.session_state.dados_processados.columns)
                 
                 if st.button("Gerar Análise Temporal", key="botao_analise_temporal"):
-                    # 🔹 Garante que a análise só será iniciada manualmente
+                    # Garante que a análise só será iniciada manualmente
                     st.session_state.analise_temporal_em_andamento = True
                     st.session_state.analise_temporal_pronta = False
                     st.session_state.analise_atual = None
-
-            
             
             # --- BLOCO SEPARADO: EXECUTA ANÁLISE TEMPORAL QUANDO A FLAG ESTIVER ATIVA ---
             if st.session_state.get("analise_temporal_em_andamento", False) and not st.session_state.get("analise_temporal_pronta", False):
-
-                # ======================================
-                # ATRIBUTOS ENVOLVIDOS NAS REGRAS (CORRETO)
-                # ======================================
 
                 atributos_regras = set()
 
@@ -1284,7 +1254,7 @@ elif tab == "Análise Temporal":
                         df_plot,
                         x="Periodo",
                         y="proporcao",
-                        text=df_plot["proporcao"].map(lambda v: f"{v:.2f}"),
+                        text=df_plot["proporcao"].map(lambda v: f"{v:.2f}".replace(".", ",")),
                         color_discrete_sequence=["skyblue"],
                     )
                     x_vals = df_plot["Periodo"].tolist()
@@ -1302,7 +1272,7 @@ elif tab == "Análise Temporal":
                         x=1,                     
                         xref="paper",            
                         y=suporte_geral,
-                        text=f"{suporte_geral:.2f}",
+                        text=f"{suporte_geral:.2f}".replace(".", ","),
                         showarrow=False,
                         font=dict(color="red", size=10),
                         xanchor="left",
@@ -1394,9 +1364,6 @@ elif tab == "Análise Temporal":
                                     medidas_particoes.append({"suporte":0, "confianca":0, "lift":0})
                                     continue
 
-                                #if "data" in df_part.columns:
-                                #    df_part = df_part.drop(columns=["data"])
-
                                 if col_data in df_part.columns:
                                     df_part = df_part.drop(columns=[col_data])
 
@@ -1475,21 +1442,10 @@ elif tab == "Análise Temporal":
                                         #x=df_medidas.index,
                                         x="Periodo",
                                         y=medida,
-                                        text=df_medidas[medida].apply(lambda x: f"{x:.2f}"),
+                                        text=df_medidas[medida].apply(lambda x: f"{x:.2f}".replace(".", ",")),
                                         title=medida.capitalize(),
                                     )
 
-                                    #if medida == "confianca":
-                                    #    fig.add_scatter(
-                                    #        x=df_medidas["Periodo"],
-                                    #        y=df_medidas["sup_consequente"],
-                                    #        mode="lines+markers",
-                                    #        name="Sup. consequente",
-                                    #        line=dict(color="#E67E22", width=2),
-                                    #        marker=dict(size=6, color="#E67E22"),
-                                    #        opacity=0.6
-                                    #    )
-                                    # Linha de referência geral (suave)
                                     y_ref = valores_gerais[medida]
                                     fig.add_hline(
                                         y=y_ref,
@@ -1507,7 +1463,7 @@ elif tab == "Análise Temporal":
                                         x=x_final,                # depois da última barra
                                         y=y_ref,                  # mesma altura da linha
                                         #text=f"{round2(y_ref)}",
-                                        text=f"{y_ref:.2f}",      # valor formatado
+                                        text=f"{y_ref:.2f}".replace(".", ","),      # valor formatado
                                         showarrow=False,
                                         font=dict(color="red", size=10),
                                         xanchor="left",           # texto “depois” da linha
@@ -1535,23 +1491,7 @@ elif tab == "Análise Temporal":
                                         customdata=df_medidas[
                                             ["Periodo", "suporte", "confianca", "lift", "sup_consequente"]
                                         ]
-                                    )
-                                    #else:
-                                    #    fig.update_traces(
-                                    #        selector=dict(type="bar"),
-                                    #        marker_color=cores_fixas[medida],
-                                    #        texttemplate="%{text}",
-                                    #        textposition="outside",
-                                    #        textfont=dict(size=10),
-                                    #        cliponaxis=False,
-                                    #        hovertemplate=(
-                                    #            " <b>%{customdata[0]}</b><br>"
-                                    #            f"{medida.capitalize()}: <b>%{{y:.2f}}</b>"
-                                    #            "<extra></extra>"
-                                    #        ),
-                                    #        customdata=df_medidas[["Periodo"]]
-                                    #    )
-                                    
+                                    )                                
 
                                     # Layout e formatação geral
                                     fig.update_layout(
@@ -1559,7 +1499,7 @@ elif tab == "Análise Temporal":
                                         margin=dict(l=10, r=10, t=50, b=50),
                                         title=dict(
                                             text=medida.capitalize(),
-                                            x=0.5,  # 🔹 Centraliza título
+                                            x=0.5,  # Centraliza título
                                             xanchor="center",
                                             font=dict(size=14, color="#333", family="Arial", weight="normal")
                                         ),
@@ -1666,7 +1606,7 @@ elif tab == "Análise Temporal":
                 # 🔹 Marca como concluída
                 st.session_state.analise_temporal_em_andamento = False
                 st.session_state.analise_temporal_pronta = True
-                st.success(f"💾 {nome_analise} salva com sucesso!")
+                st.success(f"{nome_analise} salva com sucesso!")
 # ---------- Aba 4: Histórico de Análises Gerais ----------
 # --- ABA: Histórico de Análises Gerais ---
 elif tab == "Histórico de Análises Gerais":
@@ -1773,7 +1713,7 @@ elif tab == "Histórico de Análises Temporais":
                 
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    # 👇 NOVO: mostrar arquivo analisado
+                    #mostrar arquivo analisado
                     st.markdown(
                         f"**Arquivo analisado:** {analise.get('arquivo', '(não informado)')}"
                     )
@@ -1788,8 +1728,6 @@ elif tab == "Histórico de Análises Temporais":
                         st.write(f"• {regra['antecedente']} → {regra['consequente']}")
                 with col3:
                     st.markdown("**Partições geradas:**")
-                    #duracao_calculada = ", ".join(partes)
-                    #duracao_texto = f" ({duracao_calculada if duracao_calculada else '0 dias'})"
                     
                     for j, p in enumerate(analise['parametros']['particoes']):
                         if "inicio" in p and "fim" in p:
