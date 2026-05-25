@@ -92,6 +92,16 @@ A ferramenta pode ser utilizada em cenários como:
 - estudos sobre evolução de práticas colaborativas;
 - mineração de repositórios de software;
 
+
+# Bases de Dados de Exemplo
+
+Esta pasta contém bases de dados de exemplo extraídas de repositórios de software de código aberto para testes da ferramenta TemAR.
+
+Cada arquivo CSV contém dados relacionados a pull requests, contribuidores e resultados de revisões realizadas nos projetos.
+
+As bases podem ser carregadas diretamente na interface da ferramenta.
+
+
 Licença
 
 Este projeto está licenciado sob a licença MIT.
