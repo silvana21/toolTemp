@@ -8,6 +8,9 @@ import tempfile
 import subprocess
 import os
 import re
+import plotly.express as px
+import plotly.graph_objects as go
+from datetime import timedelta
 
 def preparar_dados_para_mineracao_from_df(df_original):
     """
@@ -1011,3 +1014,119 @@ def gerar_evolucao_temporal(df, coluna_data, atributo, top_valores, freq="M"):
     #print(top_valores[:10])
 
     return evolucao
+
+def gerar_barra_temporal(particoes):
+
+    datas = []
+    hover_text = []
+    textos = []
+
+    # primeiro ponto = início da base
+    p0 = particoes[0]
+
+    if "inicio" in p0:
+        datas.append(p0["inicio"])
+    else:
+        datas.append(p0["data_min"])
+
+    hover_text.append("Início da base")
+
+    # pontos das partições
+    for i, p in enumerate(particoes):
+
+        if "fim" in p:
+            fim = p["fim"]
+            inicio = p["inicio"]
+        else:
+            fim = p["data_max"]
+            inicio = p["data_min"]
+
+        datas.append(fim)
+
+        hover_text.append(
+            f"Partição {i+1}<br>"
+            f"{inicio.date()} → {fim.date()}<br>"
+            f"{len(p['dados'])} registros"
+        )
+        textos.append(
+            f"p{i+1}<br>{len(p['dados'])} PRs"
+        )
+    x_meios = []
+    textos_bolas = [(d + timedelta(days=1)).strftime("%d-%m-%Y") for d in datas]
+
+    for i in range(len(datas)-1):
+        meio = datas[i] + (datas[i+1] - datas[i]) / 2
+        x_meios.append(meio)
+    
+    fig = go.Figure()
+
+    # Barra
+    fig.add_trace(
+        go.Scatter(
+            x=datas,
+            y=[1]*len(datas),
+            mode='lines',
+            line=dict(
+                width=6,
+                color='royalblue'
+            ),
+            hoverinfo='skip',
+            showlegend=False
+        )
+    )
+    #texto no meio da partição
+    fig.add_trace(
+        go.Scatter(
+            x=x_meios,
+            y=[1.15]*len(x_meios),
+            mode='text',
+            text=[
+                f"p{i+1}<br>{len(particoes[i]['dados'])} registros"
+                for i in range(len(particoes))
+            ],
+            textposition='top center',
+            showlegend=False
+        )
+    )
+    #bolas
+    fig.add_trace(
+        go.Scatter(
+            x=datas,
+            y=[1]*len(datas),
+            mode='markers+text',
+            marker=dict(
+                size=25,
+                color='blue'
+            ),
+            text=textos_bolas,
+            textposition='bottom center',
+            hovertext=hover_text,
+            hoverinfo='text',
+            showlegend=False
+        )
+    )
+
+    fig.update_yaxes(
+        range=[0.6,1.6],
+        visible=False
+    )
+
+    fig.update_xaxes(
+        showticklabels=False,
+        showgrid=False,
+        zeroline=False
+    )
+
+    fig.update_layout(
+        title="Linha do Tempo das Partições",
+        height=120,
+        showlegend=False,
+        margin=dict(
+        t=30,   # topo
+        b=0,   # baixo
+        l=20,   # esquerda
+        r=20    # direita
+    )
+    )
+
+    return fig

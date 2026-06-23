@@ -1116,6 +1116,15 @@ elif tab == "Análise Temporal":
                         f"Intervalo {i+1}: **{data_ini.strftime('%d/%m/%Y')}** → **{data_fim_exibicao.strftime('%d/%m/%Y')}** — "
                         f"{len(p['dados'])} registros {duracao_texto}"
                     )
+                fig = analysis.gerar_barra_temporal(
+                    st.session_state.particoes_temporais
+                )
+
+                st.plotly_chart(
+                    fig,
+                    use_container_width=True,
+                    key="barra_temporal"
+                )    
 
                 st.markdown("---")
                 
@@ -1254,7 +1263,8 @@ elif tab == "Análise Temporal":
                         df_plot,
                         x="Periodo",
                         y="proporcao",
-                        text=df_plot["proporcao"].map(lambda v: f"{v:.2f}".replace(".", ",")),
+                        #text=df_plot["proporcao"].map(lambda v: f"{v:.2f}".replace(".", ",")),
+                        text=df_plot["proporcao"].map(lambda v: f"{v:.2f}"),
                         color_discrete_sequence=["skyblue"],
                     )
                     x_vals = df_plot["Periodo"].tolist()
@@ -1269,15 +1279,16 @@ elif tab == "Análise Temporal":
                         line=dict(color="rgba(255,0,0,0.6)", width=1.2, dash="dot")
                     )
                     fig.add_annotation(
-                        x=1,                     
+                        x=0.95,                     
                         xref="paper",            
                         y=suporte_geral,
-                        text=f"{suporte_geral:.2f}".replace(".", ","),
+                        #text=f"{suporte_geral:.2f}".replace(".", ","),
+                        text=f"{suporte_geral:.2f}",
                         showarrow=False,
                         font=dict(color="red", size=10),
                         xanchor="left",
                         yanchor="bottom",
-                        xshift=5
+                        xshift=2
                     )
                     fig.update_traces(
                         textposition="outside",
@@ -1442,7 +1453,8 @@ elif tab == "Análise Temporal":
                                         #x=df_medidas.index,
                                         x="Periodo",
                                         y=medida,
-                                        text=df_medidas[medida].apply(lambda x: f"{x:.2f}".replace(".", ",")),
+                                        #text=df_medidas[medida].apply(lambda x: f"{x:.2f}".replace(".", ",")),
+                                        text=df_medidas[medida].apply(lambda x: f"{x:.2f}"),
                                         title=medida.capitalize(),
                                     )
 
@@ -1463,7 +1475,8 @@ elif tab == "Análise Temporal":
                                         x=x_final,                # depois da última barra
                                         y=y_ref,                  # mesma altura da linha
                                         #text=f"{round2(y_ref)}",
-                                        text=f"{y_ref:.2f}".replace(".", ","),      # valor formatado
+                                        #text=f"{y_ref:.2f}".replace(".", ","),      # valor formatado
+                                        text=f"{y_ref:.2f}",
                                         showarrow=False,
                                         font=dict(color="red", size=10),
                                         xanchor="left",           # texto “depois” da linha
@@ -1734,7 +1747,7 @@ elif tab == "Histórico de Análises Temporais":
                             st.write(f"Intervalo {j+1}: {p['inicio'].date()} → {p['fim'].date()} — {len(p['dados'])} registros")
                         else:
                             st.write(f"Intervalo {j+1}: {p['data_min'].date()} → {p['data_max'].date()} — {len(p['dados'])} registros")
-
+                    
                 st.markdown("---")
 
                 for regra_plotada in analise["graficos"]:
