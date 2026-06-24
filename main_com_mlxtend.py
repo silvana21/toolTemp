@@ -1333,14 +1333,57 @@ elif tab == "Análise Temporal":
 
                     return fig
 
+                if "regras_temporais_mineradas" not in st.session_state:
+
+                    st.session_state.regras_temporais_mineradas = []
+
+                    for part in st.session_state.particoes_temporais:
+
+                        df_part = part["dados"].copy()
+
+                        if df_part.empty:
+                            st.session_state.regras_temporais_mineradas.append(pd.DataFrame())
+                            continue
+
+                        if col_data in df_part.columns:
+                            df_part = df_part.drop(columns=[col_data])
+
+                        df_part_tratado, _, _ = analysis.preparar_dados_para_mineracao_from_df(df_part)
+
+                        df_regras_part = analysis.gerar_regras_com_mlxtend2(
+                            df_part_tratado,
+                            st.session_state.min_support_temporal,
+                            st.session_state.min_confidence_temporal
+                        )
+                        if not df_regras_part.empty:
+
+                            df_regras_part["id_regra"] = (
+                                df_regras_part["antecedente"]
+                                + "###"
+                                + df_regras_part["consequente"]
+                            )
+
+                            df_regras_part = df_regras_part.set_index("id_regra")
+                        #st.session_state.regras_temporais_mineradas.append(df_regras_part)
+                        st.session_state.regras_temporais_mineradas.append({
+                            "dados_tratados": df_part_tratado,
+                            "regras": df_regras_part
+                        })
 
                 # === Análise Temporal das Regras ===
+                #st.write("ENTREI NA ANALISE TEMPORAL")
                 for idx_regra, regra_user in enumerate(st.session_state.regras):
+                    #st.write("Meta-regra", idx_regra)
                     ant_attr = regra_user["antecedente"]
                     cons_attr = regra_user["consequente"]
 
+                    #base_geral_filtrada = st.session_state.base_regra[
+                    #    st.session_state.base_regra["antecedente"].str.match(f"^{ant_attr}=.+$")
+                    #]
                     base_geral_filtrada = st.session_state.base_regra[
-                        st.session_state.base_regra["antecedente"].str.match(f"^{ant_attr}=.+$")
+                        (st.session_state.base_regra["antecedente"].str.match(f"^{ant_attr}=.+$"))
+                        &
+                        (st.session_state.base_regra["consequente"].str.match(f"^{cons_attr}=.+$"))
                     ]
 
                     if base_geral_filtrada.empty:
@@ -1368,17 +1411,15 @@ elif tab == "Análise Temporal":
                             medidas_particoes = []
 
                             for i, part in enumerate(st.session_state.particoes_temporais):
+
+                                info_part = st.session_state.regras_temporais_mineradas[i]
+
+                                df_regras_part = info_part["regras"]
+
+                                df_part_tratado = info_part["dados_tratados"]
+
                                 df_part = part["dados"].copy()
-                                
 
-                                if df_part.empty:
-                                    medidas_particoes.append({"suporte":0, "confianca":0, "lift":0})
-                                    continue
-
-                                if col_data in df_part.columns:
-                                    df_part = df_part.drop(columns=[col_data])
-
-                                df_part_tratado, _, _ = analysis.preparar_dados_para_mineracao_from_df(df_part)
                                 attr_cons, val_cons = cons_val.split("=")
 
                                 if attr_cons in df_part_tratado.columns:
@@ -1387,14 +1428,6 @@ elif tab == "Análise Temporal":
                                     ).mean()
                                 else:
                                     suporte_consequente = 0
-                                
-                                
-                                
-                                df_regras_part = analysis.gerar_regras_com_mlxtend2(
-                                    df_part_tratado,
-                                    st.session_state.min_support_temporal,
-                                    st.session_state.min_confidence_temporal
-                                )
 
                                 if df_regras_part.empty:
                                     medidas_particoes.append({"suporte":0, "confianca":0, "lift":0,
@@ -1544,7 +1577,7 @@ elif tab == "Análise Temporal":
                                     st.plotly_chart(
                                         fig,
                                         use_container_width=True,
-                                        key=f"{ant_val}_{cons_val}_{medida}_{i}"
+                                        key=f"{idx_regra}_{ant_val}_{cons_val}_{medida}_{i}"
                                     )
                                     
                                     # gera fig normalmente...
