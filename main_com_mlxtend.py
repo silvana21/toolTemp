@@ -1333,7 +1333,12 @@ elif tab == "Análise Temporal":
 
                     return fig
 
-                if "regras_temporais_mineradas" not in st.session_state:
+                #if "regras_temporais_mineradas" not in st.session_state:
+                if (
+                    "regras_temporais_mineradas" not in st.session_state
+                    or len(st.session_state.regras_temporais_mineradas)
+                    != len(st.session_state.particoes_temporais)
+                ):
 
                     st.session_state.regras_temporais_mineradas = []
 
