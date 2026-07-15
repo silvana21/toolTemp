@@ -326,8 +326,8 @@ if tab == "Carregar CSV":
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
             )
-            fig.update_yaxes(tickfont=dict(size=11), automargin=True)
-            fig.update_xaxes(showgrid=False, tickfont=dict(size=11))
+            fig.update_yaxes(tickfont=dict(size=13), automargin=True)
+            fig.update_xaxes(showgrid=False, tickfont=dict(size=13))
 
             # ===== Exibição =====
             with cols[col_index]:
@@ -368,16 +368,16 @@ if tab == "Carregar CSV":
                             "D": "Daily",
                             "W": "Weekly",
                             "M": "Monthly",
-                            "Q": "Quarterly",
+                            "Q": "Trimestres",
                             "Y": "Yearly"
                         }
 
                         freq_label = map_freq.get("Q", "Temporal")  # use sua variável freq aqui
 
                         periodo_texto = (
-                            f"{freq_label} from "
-                            f"{data_inicio.strftime('%d %b %Y')} "
-                            f"to {data_fim.strftime('%d %b %Y')}"
+                            f"{freq_label} de "
+                            f"{analysis.formatar_data_pt(data_inicio)} "
+                            f"até {analysis.formatar_data_pt(data_fim)}"
                         )
                         fig_time = px.bar(
                             evolucao,
@@ -391,18 +391,21 @@ if tab == "Carregar CSV":
                         fig_time.update_layout(
                             title=dict(
                                 text=(
-                                    f"{col} over time"
+                                    f"{col} ao longo do tempo"
                                     f"<br><sup style='color:#6e7781; font-size:12px; font-weight:normal;'>"
                                     f"{periodo_texto}</sup>"
                                 ),
-                                x=0.1,
-                                xanchor="left",
+                                x=0.5,
+                                xanchor="center",
                                 font=dict(size=16)
                             ),
                             margin=dict(l=40, r=20, t=90, b=10),
                             xaxis_title="",
                             yaxis_title="",
                             legend_title="",
+                            legend=dict(
+                                font=dict(size=12)
+                            ),
                             plot_bgcolor="rgba(0,0,0,0)",
                             paper_bgcolor="rgba(0,0,0,0)",
                             barmode="group",
@@ -418,7 +421,13 @@ if tab == "Carregar CSV":
                                 
                             )
                         )
+                        fig_time.update_xaxes(
+                            tickfont=dict(size=12)
+                        )
 
+                        fig_time.update_yaxes(
+                            tickfont=dict(size=12)
+                        )
                         fig_time.update_traces(
                             hovertemplate=(
                                 "Período: %{customdata[0]}<br>"
@@ -1236,13 +1245,13 @@ elif tab == "Análise Temporal":
 
                         if "inicio" in part:
                             periodo = (
-                                f"{part['inicio'].strftime('%d/%m/%Y')} → "
-                                f"{part['fim'].strftime('%d/%m/%Y')}"
+                                f"{part['inicio'].strftime('%d/%m/%y')} - "
+                                f"{part['fim'].strftime('%d/%m/%y')}"
                             )
                         else:
                             periodo = (
-                                f"{part['data_min'].strftime('%d/%m/%Y')} → "
-                                f"{part['data_max'].strftime('%d/%m/%Y')}"
+                                f"{part['data_min'].strftime('%d/%m/%y')} - "
+                                f"{part['data_max'].strftime('%d/%m/%y')}"
                             )
 
                         resultados_attr.append({
@@ -1267,8 +1276,7 @@ elif tab == "Análise Temporal":
                         text=df_plot["proporcao"].map(lambda v: f"{v:.2f}"),
                         color_discrete_sequence=["skyblue"],
                     )
-                    x_vals = df_plot["Periodo"].tolist()
-
+                                     
                     fig.add_shape(
                         type="line",
                         x0=0,
@@ -1285,7 +1293,7 @@ elif tab == "Análise Temporal":
                         #text=f"{suporte_geral:.2f}".replace(".", ","),
                         text=f"{suporte_geral:.2f}",
                         showarrow=False,
-                        font=dict(color="red", size=10),
+                        font=dict(color="red", size=12),
                         xanchor="left",
                         yanchor="bottom",
                         xshift=2
@@ -1308,13 +1316,13 @@ elif tab == "Análise Temporal":
                         showlegend=False,
                         plot_bgcolor="white",
                         paper_bgcolor="white",
-                        xaxis_tickangle=45,
+                        xaxis_tickangle=0,
                         title=dict(
                             text=f"{atributo}={valor}",
                             x=0.5,
                             xanchor="center",
                             font=dict(
-                                size=13,
+                                size=12,
                                 color="#333",
                                 family="Arial",
                                 weight="normal"   # ← remove negrito
@@ -1478,7 +1486,7 @@ elif tab == "Análise Temporal":
                                     ini, fim = p["inicio"].date(), p["fim"].date()
                                 else:
                                     ini, fim = p["data_min"].date(), p["data_max"].date()
-                                periodos.append(f"{ini.strftime('%d/%m/%Y')} → {fim.strftime('%d/%m/%Y')}")
+                                periodos.append(f"{ini.strftime('%d/%m/%y')} - {fim.strftime('%d/%m/%y')}")
                             df_medidas["Periodo"] = periodos
                             cols = st.columns(3)
                             figs_regra = {}
@@ -1516,7 +1524,7 @@ elif tab == "Análise Temporal":
                                         #text=f"{y_ref:.2f}".replace(".", ","),      # valor formatado
                                         text=f"{y_ref:.2f}",
                                         showarrow=False,
-                                        font=dict(color="red", size=10),
+                                        font=dict(color="red", size=12),
                                         xanchor="left",           # texto “depois” da linha
                                         yanchor="bottom",
                                         xshift=10                 # desloca levemente para a direita
@@ -1528,7 +1536,7 @@ elif tab == "Análise Temporal":
                                         marker_color=cores_fixas[medida],
                                         texttemplate="%{text}",
                                         textposition="outside",
-                                        textfont=dict(size=10),
+                                        textfont=dict(size=12),
                                         cliponaxis=False,
                                         hovertemplate=(
                                             " <b>%{customdata[0]}</b><br>"
@@ -1562,15 +1570,15 @@ elif tab == "Análise Temporal":
                                             x=0.5
                                         ),
                                          xaxis=dict(
-                                            tickangle=45,
+                                            tickangle=0,
                                             title=None,
-                                            tickfont=dict(size=10),
+                                            tickfont=dict(size=12),
                                             showgrid=False   #  remove grade vertical
                                             #zeroline=False    #  remove linha zero
                                         ),
                                         yaxis=dict(
                                             title=None,
-                                            tickfont=dict(size=10),
+                                            tickfont=dict(size=12),
                                             showgrid=False   #  remove grade horizontal
                                             #zeroline=False    #  remove linha zero
                                         ),
