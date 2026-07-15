@@ -161,11 +161,20 @@ Plotly
 Matplotlib
 Licença
 
-License
+
+## License
 
 MIT License.
 
-Authors
+
+## Citation
+
+This version of the artifact is archived on Zenodo:
+
+DOI: https://doi.org/10.5281/zenodo.20367413
+
+
+## Author
 
 Silvana de Andrade Gonçalves
 
