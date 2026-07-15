@@ -1,113 +1,174 @@
-# TEMAR - Temporal Association Rule Analyzer
+## TEMAR - Temporal Association Rule Analyzer
 
-Ferramenta web para análise temporal de regras de associação em dados de Engenharia de Software.
+TEMAR is a web-based tool developed to support the temporal analysis of association rules extracted from Software Engineering datasets, especially data obtained from pull requests of open-source software repositories.
 
-## Sobre a Ferramenta
+The tool applies the Apriori algorithm to discover association rules and allows users to analyze how rule quality measures evolve over time, including:
 
-A ferramenta foi desenvolvida para apoiar análises temporais de regras de associação extraídas de dados provenientes de repositórios de software, especialmente dados relacionados a *pull requests* de projetos de código aberto.
+Support
+Confidence
+Lift
 
-A aplicação permite extrair regras de associação utilizando o algoritmo Apriori e acompanhar a evolução temporal de medidas de interesse como Suporte, Confiança e Lift em diferentes partições temporais da base de dados.
+The system supports multiple temporal partitioning strategies, enabling researchers to investigate how association patterns change during software evolution.
 
-O objetivo é auxiliar pesquisadores e profissionais na identificação de mudanças temporais em padrões observados em ambientes colaborativos de desenvolvimento de software.
 
----
+## Features
 
-## Principais Funcionalidades
+Features
+Import CSV datasets
+Mine association rules using Apriori
+Configure minimum support and confidence
+Temporal partitioning
+ Manual temporal milestones
+ Equal-size intervals
+ Equal-number-of-records partitions
+Compare rule evolution over time
+Interactive visualizations
+Plot Support, Confidence and Lift
 
-- Importação de bases de dados em formato CSV;
-- Extração de regras de associação utilizando Apriori;
-- Configuração de suporte e confiança mínimos;
-- Visualização das medidas:
-  - Suporte;
-  - Confiança;
-  - Lift;
-- Particionamento temporal da base de dados;
-- Definição manual de marcos temporais;
-- Comparação temporal das regras de associação;
-- Visualização gráfica da evolução temporal das medidas;
-- Análise temporal de antecedentes e consequentes das regras.
 
----
+## Repository Organization
 
-## Estratégias de Particionamento Temporal
+.
+├── main_com_mlxtend.py            # Streamlit application
+├── requirements.txt               # Python dependencies
+├── data/                          # Example datasets
+├── analysis.py                    # Streamlit auxiliar functions
+├── LICENSE
+└── README.md
 
-Atualmente, a ferramenta suporta três estratégias de particionamento:
 
-1. Definição manual de marcos temporais;
-2. Intervalos temporais de mesmo tamanho;
-3. Particionamento com mesma quantidade de registros.
+## Associated Paper
 
----
+This artifact accompanies the paper:
 
-## Tecnologias Utilizadas
+TEMAR: Uma Ferramenta para Análise Temporal de Regras de Associação em Dados de Repositórios de Software
 
-- Python
-- Streamlit
-- MLxtend
-- Pandas
-- Plotly
-- Matplotlib
+Accepted at SBES 2026.
 
-Bibliotecas adicionais:
+PDF:
 
-```python
-import matplotlib.pyplot as plt
-import plotly.graph_objects as go
-import plotly.express as px
-from streamlit_option_menu import option_menu
-from dateutil.relativedelta import relativedelta
-```
-Instalação
+(link do artigo após publicação)
 
-Clone o repositório:
+## Requirements
+
+Python 3.11 or newer
+
+Tested on:
+
+- Windows 11
+
+Required libraries:
+
+- streamlit
+- pandas
+- mlxtend
+- plotly
+- matplotlib
+- python-dateutil
+- streamlit-option-menu
+
+Hardware requirements
+
+- 4 GB RAM minimum
+- 500 MB free disk space
+
+No GPU is required.
+
+
+## Installation
+
+Clone the repository
 
 ```git clone https://github.com/silvana21/toolTemp.git```
 
-Acesse a pasta do projeto:
+Enter the project
 
-```cd SEU-REPOSITORIO```
+```cd toolTemp```
 
-Instale as dependências:
+Create a virtual environment (optional)
+
+```python -m venv .venv```
+
+Activate the environment
+
+Windows
+
+```.venv\Scripts\activate```
+
+Linux/macOS
+
+```source .venv/bin/activate```
+
+Install dependencies
 
 ```pip install -r requirements.txt```
 
-Execução
+Running the Tool
 
-Para iniciar a aplicação:
 ```
-streamlit run app.py
+streamlit run main_com_mlxtend.py
 ```
-Formato dos Dados
 
-A ferramenta espera arquivos CSV contendo atributos categóricos.
+The application should start a local Streamlit server and display a message similar to:
 
-Atributos contínuos e temporais devem ser previamente discretizados quando necessário para participação na mineração das regras de associação.
+Local URL:
+http://localhost:8501
 
-Exemplos de Uso
-
-A ferramenta pode ser utilizada em cenários como:
-
-- análise temporal de aceitação de pull requests;
-- investigação de padrões de contribuição;
-- estudos sobre evolução de práticas colaborativas;
-- mineração de repositórios de software;
+Open the URL in a web browser.
 
 
-# Bases de Dados de Exemplo
+## Input Data
 
-Esta pasta contém bases de dados de exemplo extraídas de repositórios de software de código aberto para testes da ferramenta TemAR.
-
-Cada arquivo CSV contém dados relacionados a pull requests, contribuidores e resultados de revisões realizadas nos projetos.
-
-As bases podem ser carregadas diretamente na interface da ferramenta.
+The tool expects CSV files containing categorical attributes.
+Continuous and temporal attributes must be discretized beforehand, when necessary, for inclusion in association rule mining.
 
 
+## Example Workflow
+
+- Run the application.
+- Load one of the sample CSV files.
+- Configure minimum support and confidence.
+- Choose the rules to analyze.
+- Run the mining process for the complete dataset.
+- Choose the partitioning strategy.
+- Configure minimum support and confidence to temporal analysis.
+- Run the mining process for the partitioned datasets.
+- View the charts.
+
+
+## Example Datasets
+
+The data/ directory contains example datasets extracted from open-source software repositories for demonstrating and testing the TemAR tool.
+
+Each CSV file includes categorical data derived from pull requests, contributors, and code review outcomes. These datasets can be directly loaded through the TemAR interface to explore the tool's temporal association rule mining capabilities.
+
+To use an example dataset:
+
+- Launch the application.
+- Select Load Dataset.
+- Choose one of the CSV files available in the data/ directory.
+- Configure the mining parameters and chose the rules to analyze.
+- Run the analysis and explore the temporal visualizations presented.
+
+
+## Technologies
+
+Python
+Streamlit
+Pandas
+MLxtend
+Plotly
+Matplotlib
 Licença
 
-Este projeto está licenciado sob a licença MIT.
+License
 
-Contato
+MIT License.
+
+Authors
 
 Silvana de Andrade Gonçalves
+
 Universidade Federal Fluminense (UFF)
+
 Instituto Federal do Acre (IFAC)
