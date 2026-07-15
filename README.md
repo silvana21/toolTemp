@@ -1,4 +1,4 @@
-# Temporal Association Rule Analyzer
+# TEMAR - Temporal Association Rule Analyzer
 
 Ferramenta web para análise temporal de regras de associação em dados de Engenharia de Software.
 
