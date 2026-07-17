@@ -31,7 +31,8 @@ Plot Support, Confidence and Lift
 .
 ├── main_com_mlxtend.py            # Streamlit application
 ├── requirements.txt               # Python dependencies
-├── data/                          # Example datasets
+├── datasets/                      # Example datasets
+├── paper_sbes2026/                # Paper Accepted at SBES 2026
 ├── analysis.py                    # Streamlit auxiliar functions
 ├── LICENSE
 └── README.md
@@ -45,9 +46,7 @@ TEMAR: Uma Ferramenta para Análise Temporal de Regras de Associação em Dados 
 
 Accepted at SBES 2026.
 
-PDF:
-
-(link do artigo após publicação)
+[paper](./paper/paper_sbes2026.pdf) 
 
 ## Requirements
 
@@ -138,7 +137,7 @@ Continuous and temporal attributes must be discretized beforehand, when necessar
 
 ## Example Datasets
 
-The data/ directory contains example datasets extracted from open-source software repositories for demonstrating and testing the TemAR tool.
+The datasets/ directory contains example datasets extracted from open-source software repositories for demonstrating and testing the TemAR tool.
 
 Each CSV file includes categorical data derived from pull requests, contributors, and code review outcomes. These datasets can be directly loaded through the TemAR interface to explore the tool's temporal association rule mining capabilities.
 
@@ -146,7 +145,7 @@ To use an example dataset:
 
 - Launch the application.
 - Select Load Dataset.
-- Choose one of the CSV files available in the data/ directory.
+- Choose one of the CSV files available in the datasets/ directory.
 - Configure the mining parameters and chose the rules to analyze.
 - Run the analysis and explore the temporal visualizations presented.
 

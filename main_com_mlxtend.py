@@ -1316,7 +1316,7 @@ elif tab == "Análise Temporal":
                         showlegend=False,
                         plot_bgcolor="white",
                         paper_bgcolor="white",
-                        xaxis_tickangle=0,
+                        xaxis_tickangle=45,
                         title=dict(
                             text=f"{atributo}={valor}",
                             x=0.5,
@@ -1570,7 +1570,7 @@ elif tab == "Análise Temporal":
                                             x=0.5
                                         ),
                                          xaxis=dict(
-                                            tickangle=0,
+                                            tickangle=45,
                                             title=None,
                                             tickfont=dict(size=12),
                                             showgrid=False   #  remove grade vertical
