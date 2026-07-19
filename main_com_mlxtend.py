@@ -140,6 +140,34 @@ if tab == "Carregar CSV":
     # 1) Se houve upload e é um arquivo novo → processa e salva tudo no session_state
     if uploaded_file is not None:
         if ("arquivo_carregado" not in st.session_state) or (uploaded_file.name != st.session_state["arquivo_carregado"]):
+            
+            # ======================================================
+            # Limpa somente a análise atual caso o outro arquivo seja carregado
+            # ---------- Regras Gerais ----------
+            for chave in [
+                "regras",
+                "df_regras",
+                "base_regra",
+                "mostrar_regras",
+                "antecedente_select",
+                "consequente_select",
+                "reset_flag",
+                "salvou_analise_geral",
+            ]:
+                st.session_state.pop(chave, None)
+            # ---------- Análise Temporal ----------
+            for chave in [
+                "particoes_temporais",
+                "particoes_last_msg",
+                "marcos_temporais",
+                "tipo_particionamento",
+                "analise_temporal_em_andamento",
+                "analise_temporal_pronta",
+                "analise_atual",
+                "regras_temporais_mineradas",
+            ]:
+                st.session_state.pop(chave, None)
+
             st.session_state["arquivo_carregado"] = uploaded_file.name
             st.session_state.dados_original = pd.read_csv(uploaded_file)
 
@@ -1423,8 +1451,6 @@ elif tab == "Análise Temporal":
                                 unsafe_allow_html=True
                             )
                             combo_id = f"{idx_regra}_{ant_val}_{cons_val}"
-                            
-
 
                             medidas_particoes = []
 
@@ -1437,7 +1463,7 @@ elif tab == "Análise Temporal":
                                 df_part_tratado = info_part["dados_tratados"]
 
                                 df_part = part["dados"].copy()
-
+                                qtd_registros = len(df_part)
                                 attr_cons, val_cons = cons_val.split("=")
 
                                 if attr_cons in df_part_tratado.columns:
@@ -1458,7 +1484,7 @@ elif tab == "Análise Temporal":
                                 ]
 
                                 if df_filtrado_part.empty:
-                                    medidas_particoes.append({"suporte":0, "confianca":0, "lift":0})
+                                    medidas_particoes.append({"suporte":0, "confianca":0, "lift":0, "qtd_registros": qtd_registros})
                                 else:
                                     row = df_filtrado_part.iloc[0]
                                     medidas_particoes.append({
@@ -1466,7 +1492,8 @@ elif tab == "Análise Temporal":
                                         "confianca": row["confianca"],
                                         "lift": row["lift"],
                                         #alter aqui
-                                        "sup_consequente": suporte_consequente
+                                        "sup_consequente": suporte_consequente,
+                                        "qtd_registros": qtd_registros
                                     })
 
                             df_medidas = pd.DataFrame(medidas_particoes)
@@ -1535,7 +1562,6 @@ elif tab == "Análise Temporal":
                                         xshift=10                 # desloca levemente para a direita
                                     )
 
-                                    #if medida == "lift":
                                     fig.update_traces(
                                         selector=dict(type="bar"),
                                         marker_color=cores_fixas[medida],
@@ -1548,12 +1574,17 @@ elif tab == "Análise Temporal":
                                             "Suporte: <b>%{customdata[1]:.2f}</b><br>"
                                             "Confiança: <b>%{customdata[2]:.2f}</b><br>"
                                             "Lift: <b>%{customdata[3]:.2f}</b><br>"
-                                            "Sup. Consequente: <b>%{customdata[4]:.2f}</b>"
+                                            "Sup. Consequente: <b>%{customdata[4]:.2f}</b><br>"
+                                            "Quantidade de Registros: <b>%{customdata[5]}</b>"
                                             "<extra></extra>"
                                         ),
-                                        #customdata=df_medidas[["Periodo", "sup_consequente"]]
                                         customdata=df_medidas[
-                                            ["Periodo", "suporte", "confianca", "lift", "sup_consequente"]
+                                            ["Periodo", 
+                                            "suporte", 
+                                            "confianca", 
+                                            "lift", 
+                                            "sup_consequente", 
+                                            "qtd_registros"]
                                         ]
                                     )                                
 
