@@ -46,7 +46,7 @@ TEMAR: Uma Ferramenta para Análise Temporal de Regras de Associação em Dados 
 
 Accepted at SBES 2026.
 
-[paper](./paper/paper_sbes2026.pdf) 
+[paper](./paper/paper_TEMAR_SBES2026.pdf) 
 
 ## Requirements
 
