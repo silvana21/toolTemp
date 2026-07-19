@@ -167,12 +167,16 @@ if tab == "Carregar CSV":
         # =====================================
         df_original = st.session_state.dados_original
 
-        col_data = None
+        #col_data = None
+        col_data = st.session_state.get("coluna_data")
 
         for coluna in df_original.columns:
 
-            if df_original[coluna].dtype == 'object':
-
+            #if df_original[coluna].dtype == 'object':
+            if (
+                pd.api.types.is_object_dtype(df_original[coluna])
+                or pd.api.types.is_datetime64_any_dtype(df_original[coluna])
+            ):
                 # tentativa com formato conhecido
                 converted = pd.to_datetime(
                     df_original[coluna],
@@ -190,8 +194,9 @@ if tab == "Carregar CSV":
                     col_data = coluna
                     df_original[coluna] = converted
                     break
-        st.session_state["coluna_data"] = col_data
-
+        #st.session_state["coluna_data"] = col_data
+        if col_data is not None:
+            st.session_state["coluna_data"] = col_data
         atributos_remover = st.session_state.get("atributos_removidos", [])
 
         # garante que tem os resumos (se não houver por algum motivo, gera agora)
@@ -348,7 +353,7 @@ if tab == "Carregar CSV":
                     "coluna_data" in st.session_state
                     and st.session_state["coluna_data"] in df_original.columns
                 ):
-                    st.session_state["coluna_data"] = col_data
+                    #st.session_state["coluna_data"] = col_data
                     top_valores = value_counts.index.tolist()
 
                     evolucao = analysis.gerar_evolucao_temporal(
