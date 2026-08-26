@@ -30,11 +30,17 @@ Plot Support, Confidence and Lift
 
 .
 ├── main_com_mlxtend.py            # Streamlit application
+
 ├── requirements.txt               # Python dependencies
+
 ├── datasets/                      # Example datasets
+
 ├── paper/                         # Paper Accepted at SBES 2026
+
 ├── analysis.py                    # Streamlit auxiliar functions
+
 ├── LICENSE
+
 └── README.md
 
 
