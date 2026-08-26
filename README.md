@@ -32,7 +32,7 @@ Plot Support, Confidence and Lift
 ├── main_com_mlxtend.py            # Streamlit application
 ├── requirements.txt               # Python dependencies
 ├── datasets/                      # Example datasets
-├── paper_sbes2026/                # Paper Accepted at SBES 2026
+├── paper/                         # Paper Accepted at SBES 2026
 ├── analysis.py                    # Streamlit auxiliar functions
 ├── LICENSE
 └── README.md
@@ -50,7 +50,7 @@ Accepted at SBES 2026.
 
 ## Requirements
 
-Python 3.11 or newer
+Python 3.12
 
 Tested on:
 
@@ -58,13 +58,15 @@ Tested on:
 
 Required libraries:
 
-- streamlit
+- numpy==2.3.2
 - pandas
+- matplotlib
 - mlxtend
 - plotly
-- matplotlib
+- streamlit
+- streamlit-option-men
+- streamlit-sortables==0.3.1
 - python-dateutil
-- streamlit-option-menu
 
 Hardware requirements
 
@@ -78,7 +80,7 @@ No GPU is required.
 
 Clone the repository
 
-```git clone https://github.com/silvana21/toolTemp.git```
+```git clone --branch v1.0.2 https://github.com/silvana21/toolTemp.git```
 
 Enter the project
 
@@ -170,7 +172,7 @@ MIT License.
 
 This version of the artifact is archived on Zenodo:
 
-DOI: https://doi.org/10.5281/zenodo.21446827
+DOI: [will be updated after the new Zenodo version is published]
 
 
 ## Author
