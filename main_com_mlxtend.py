@@ -1373,7 +1373,223 @@ elif tab == "Análise Temporal":
                     #fig.update_yaxes(automargin=True)
 
                     return fig
+                def gerar_grafico_antecedente_composto(antecedente, particoes, df_geral):
 
+                    # ==========================================================
+                    # Separa os itens do antecedente
+                    # Exemplo:
+                    # "pr_size=pr_l,first_pull=False"
+                    # ->
+                    # ["pr_size=pr_l", "first_pull=False"]
+                    # ==========================================================
+
+                    itens = [item.strip() for item in antecedente.split(",") if item.strip()]
+
+                    condicoes = []
+
+                    for item in itens:
+                        partes = item.split("=", 1)
+
+                        if len(partes) != 2:
+                            continue
+
+                        atributo, valor = partes
+                        condicoes.append((atributo.strip(), valor.strip()))
+
+                    if not condicoes:
+                        return None
+
+                    # ==========================================================
+                    # SUPORTE GERAL DO ANTECEDENTE COMPOSTO
+                    # ==========================================================
+
+                    if df_geral.empty:
+                        suporte_geral = 0
+                    else:
+                        mask_geral = pd.Series(True, index=df_geral.index)
+
+                        for atributo, valor in condicoes:
+
+                            if atributo not in df_geral.columns:
+                                mask_geral &= False
+                                continue
+
+                            serie = df_geral[atributo]
+
+                            mask_geral &= (
+                                serie.notna() &
+                                (serie.astype(str) == valor)
+                            )
+
+                        suporte_geral = (
+                            mask_geral.sum() / len(df_geral)
+                            if len(df_geral) > 0 else 0
+                        )
+
+                    # ==========================================================
+                    # SUPORTE TEMPORAL
+                    # ==========================================================
+
+                    resultados_attr = []
+
+                    for part in particoes:
+
+                        df_part = part["dados"]
+
+                        if df_part.empty:
+                            continue
+
+                        mask = pd.Series(True, index=df_part.index)
+
+                        for atributo, valor in condicoes:
+
+                            if atributo not in df_part.columns:
+                                mask &= False
+                                continue
+
+                            serie = df_part[atributo]
+
+                            mask &= (
+                                serie.notna() &
+                                (serie.astype(str) == valor)
+                            )
+
+                        quantidade = mask.sum()
+                        total = len(df_part)
+
+                        proporcao = (
+                            quantidade / total
+                            if total > 0 else 0
+                        )
+
+                        if "inicio" in part:
+                            periodo = (
+                                f"{part['inicio'].strftime('%d/%m/%y')} - "
+                                f"{part['fim'].strftime('%d/%m/%y')}"
+                            )
+                        else:
+                            periodo = (
+                                f"{part['data_min'].strftime('%d/%m/%y')} - "
+                                f"{part['data_max'].strftime('%d/%m/%y')}"
+                            )
+
+                        resultados_attr.append({
+                            "Periodo": periodo,
+                            "proporcao": proporcao,
+                            "quantidade": quantidade,
+                            "antecedente": antecedente
+                        })
+
+                    if not resultados_attr:
+                        return None
+
+                    # ==========================================================
+                    # DATAFRAME DO GRÁFICO
+                    # ==========================================================
+
+                    df_plot = pd.DataFrame(resultados_attr)
+
+                    customdata_hover = df_plot[
+                        ["Periodo", "proporcao", "quantidade"]
+                    ]
+
+                    fig = px.bar(
+                        df_plot,
+                        x="Periodo",
+                        y="proporcao",
+                        text=df_plot["proporcao"].map(
+                            lambda v: f"{v:.2f}"
+                        ),
+                        color_discrete_sequence=["skyblue"],
+                    )
+
+                    # ==========================================================
+                    # LINHA DO SUPORTE GERAL
+                    # ==========================================================
+
+                    fig.add_shape(
+                        type="line",
+                        x0=0,
+                        x1=1,
+                        xref="paper",
+                        y0=suporte_geral,
+                        y1=suporte_geral,
+                        line=dict(
+                            color="rgba(255,0,0,0.6)",
+                            width=1.2,
+                            dash="dot"
+                        )
+                    )
+
+                    fig.add_annotation(
+                        x=0.95,
+                        xref="paper",
+                        y=suporte_geral,
+                        text=f"{suporte_geral:.2f}",
+                        showarrow=False,
+                        font=dict(
+                            color="red",
+                            size=12
+                        ),
+                        xanchor="left",
+                        yanchor="bottom",
+                        xshift=2
+                    )
+
+                    # ==========================================================
+                    # HOVER
+                    # ==========================================================
+
+                    fig.update_traces(
+                        textposition="outside",
+                        customdata=customdata_hover,
+                        hovertemplate=(
+                            "<b>%{customdata[0]}</b><br>"
+                            "Suporte do antecedente: "
+                            "<b>%{customdata[1]:.2f}</b><br>"
+                            "Quantidade: <b>%{customdata[2]}</b>"
+                            "<extra></extra>"
+                        )
+                    )
+
+                    # ==========================================================
+                    # LAYOUT
+                    # ==========================================================
+
+                    fig.update_layout(
+                        height=300,
+                        margin=dict(
+                            l=10,
+                            r=10,
+                            t=80,
+                            b=30
+                        ),
+                        showlegend=False,
+                        plot_bgcolor="white",
+                        paper_bgcolor="white",
+                        xaxis_tickangle=45,
+                        title=dict(
+                            text=antecedente,
+                            x=0.5,
+                            xanchor="center",
+                            font=dict(
+                                size=12,
+                                color="#333",
+                                family="Arial",
+                                weight="normal"
+                            )
+                        ),
+                        yaxis=dict(
+                            title="Suporte",
+                            range=[0, 1.2],
+                            showgrid=False
+                        ),
+                        xaxis_title=None,
+                        uniformtext_minsize=8,
+                        uniformtext_mode="hide",
+                    )
+
+                    return fig
                 #if "regras_temporais_mineradas" not in st.session_state:
                 if (
                     "regras_temporais_mineradas" not in st.session_state
@@ -1484,7 +1700,7 @@ elif tab == "Análise Temporal":
                                 ]
 
                                 if df_filtrado_part.empty:
-                                    medidas_particoes.append({"suporte":0, "confianca":0, "lift":0, "qtd_registros": qtd_registros})
+                                    medidas_particoes.append({"suporte":0, "confianca":0, "lift":0,  "sup_consequente": suporte_consequente,"qtd_registros": qtd_registros})
                                 else:
                                     row = df_filtrado_part.iloc[0]
                                     medidas_particoes.append({
@@ -1656,15 +1872,43 @@ elif tab == "Análise Temporal":
                             
                             # separa atributo e valor da regra
                             attr_ant, val_ant = ant_val.split("=")
+                            
                             attr_cons, val_cons = cons_val.split("=")
 
+                            # ==========================================================
+                            # GRÁFICO DO ANTECEDENTE
+                            # ==========================================================
+
                             with col_attr1:
-                                fig_attr = gerar_grafico_atributo(
-                                    attr_ant,
-                                    val_ant,
-                                    st.session_state.particoes_temporais,
-                                    df_original
-                                )
+
+                                # Verifica se o antecedente possui mais de um item
+                                itens_antecedente = [
+                                    item.strip()
+                                    for item in ant_val.split(",")
+                                    if item.strip()
+                                ]
+
+                                if len(itens_antecedente) > 1:
+
+                                    # Antecedente composto
+                                    fig_attr = gerar_grafico_antecedente_composto(
+                                        ant_val,
+                                        st.session_state.particoes_temporais,
+                                        df_original
+                                    )
+
+                                else:
+
+                                    # Antecedente simples
+                                    attr_ant, val_ant = ant_val.split("=", 1)
+
+                                    fig_attr = gerar_grafico_atributo(
+                                        attr_ant,
+                                        val_ant,
+                                        st.session_state.particoes_temporais,
+                                        df_original
+                                    )
+
                                 if fig_attr:
                                     st.plotly_chart(
                                         fig_attr,
@@ -1672,16 +1916,25 @@ elif tab == "Análise Temporal":
                                         key=f"attr_ant_{safe_key(combo_id)}"
                                     )
 
+
+                            # ==========================================================
+                            # GRÁFICO DO CONSEQUENTE
+                            # ==========================================================
+
                             with col_attr3:
-                                fig_attr = gerar_grafico_atributo(
+
+                                attr_cons, val_cons = cons_val.split("=", 1)
+
+                                fig_cons = gerar_grafico_atributo(
                                     attr_cons,
                                     val_cons,
                                     st.session_state.particoes_temporais,
                                     df_original
                                 )
-                                if fig_attr:
+
+                                if fig_cons:
                                     st.plotly_chart(
-                                        fig_attr,
+                                        fig_cons,
                                         use_container_width=True,
                                         key=f"attr_cons_{safe_key(combo_id)}"
                                     )

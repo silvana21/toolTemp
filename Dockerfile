@@ -1,5 +1,5 @@
-# Usar Python 3.10 slim
-FROM python:3.10-slim
+# Usar Python 3.12 slim
+FROM python:3.12-slim
 
 # Criar e usar pasta da aplicação
 WORKDIR /app
@@ -10,5 +10,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Comando para rodar o FastAPI
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Comando para rodar o Streamlit
+CMD ["streamlit", "run", "main_com_mlxtend.py", "--server.address=0.0.0.0", "--server.port=8501"]
