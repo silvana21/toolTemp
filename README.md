@@ -168,6 +168,67 @@ Matplotlib
 Licença
 
 
+## Reproducible Validation Example
+**Dataset:** `datasets/django.csv`
+**Minimum Support:** 1.00%
+**Minimum Confidence:** 1.00%
+**Selected Meta Regra:** first_pull → merged
+
+### Expected Results from the General Analysis
+
+**Rule:** `first_pull=False → merged=False`
+Metric	  Expected Value
+Support	       0.30
+Confidence	   0.44
+Lift	       0.86
+
+**Rule:** `first_pull=True → merged=False`
+Metric	  Expected Value
+Support	       0.22
+Confidence	   0.68
+Lift	       1.31
+
+**Rule:** `first_pull=False → merged=True`
+Metric	  Expected Value
+Support	       0.38
+Confidence	   0.56
+Lift	       1.15
+
+**Rule:** `first_pull=True → merged=True`
+Metric	  Expected Value
+Support	       0.10
+Confidence	   0.32
+Lift	       0.67
+
+![General Analysis](./datasets/validation/general_analysis.png)
+
+### Temporal Analysis
+
+The temporal analysis was performed using three equal-duration temporal partitions.
+
+The dataset covers the period from **28/04/2012 to 29/11/2025**. The tool divided this period into three temporal partitions with approximately equal durations:
+
+| Partition | Start Date | End Date | Records | Duration |
+|---|---|---|---:|---|
+| P1 | 28/04/2012 | 07/11/2016 | 5,310 | 4 years, 6 months, 10 days |
+| P2 | 07/11/2016 | 19/05/2021 | 5,116 | 4 years, 6 months, 11 days |
+| P3 | 19/05/2021 | 29/11/2025 | 3,967 | 4 years, 6 months, 9 days |
+
+The minimum Support and minimum Confidence were both set to **1.00%**. The temporal analysis was then generated using the `first_pull → merged` meta-rule.
+
+### Expected Temporal Results
+
+| Partition | Support | Confidence | Lift |
+|---|---:|---:|---:|
+| P1 | 0.05 | 0.14 | 0.90 |
+| P2 | 0.13 | 0.47 | 0.68 |
+| P3 | 0.13 | 0.43 | 0.67 |
+
+The results show that the rule metrics vary across the temporal partitions. Support increases from 0.05 in P1 to 0.13 in P2 and remains stable in P3. Confidence increases from 0.14 in P1 to 0.47 in P2, followed by a slight decrease to 0.43 in P3. Lift decreases from 0.90 in P1 to 0.68 in P2 and 0.67 in P3.
+
+![Temporal Analysis](./datasets/validation/temporal_analysis.png)
+
+
 ## License
 
 MIT License.
