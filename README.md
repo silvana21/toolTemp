@@ -204,7 +204,7 @@ Run the general analysis. The following results are expected:
 
 **Rule:** `first_pull=True → merged=True`
 
-| Metric | 	  Expected | Value |
+| Metric | 	  Expected Value |
 | --- | --- |
 | Support	|       0.10 |
 | Confidence |	   0.32 |
