@@ -157,35 +157,25 @@ To use an example dataset:
 - Run the analysis and explore the temporal visualizations presented.
 
 
-## Technologies
-
-Python
-
-Streamlit
-
-Pandas
-
-MLxtend
-
-Plotly
-
-Matplotlib
-
-Licença
-
-
-
 ## Reproducible Validation Example
-**Dataset:** `datasets/django.csv`
 
-**Minimum Support:** 1.00%
+### Load CSV Tab
 
-**Minimum Confidence:** 1.00%
+In the **Carregar CSV** tab, upload the dataset:
 
-**Selected Meta Regra:** first_pull → merged
+`datasets/django.csv`
 
+Verify that the dataset is loaded successfully before proceeding to the next tab.
 
-### Expected Results from the General Analysis
+### General Rules Tab
+
+In the **Regras Gerais** tab, configure the analysis as follows:
+
+- **Suporte mínimo:** 1.00%
+- **Confiança mínima:** 1.00%
+- **Meta-regra:** `first_pull → merged`
+
+Run the general analysis. The following results are expected:
 
 **Rule:** `first_pull=False → merged=False`
 
@@ -214,7 +204,7 @@ Licença
 
 **Rule:** `first_pull=True → merged=True`
 
-| Metric|	  Expected | Value |
+| Metric | 	  Expected | Value |
 | --- | --- |
 | Support	|       0.10 |
 | Confidence |	   0.32 |
@@ -222,9 +212,12 @@ Licença
 
 ![General Analysis](./datasets/validation/general_analysis.png)
 
-### Temporal Analysis
+### Temporal Analysis Tab
 
-The temporal analysis was performed using three equal-duration temporal partitions.
+In the **Análise Temporal** tab:
+
+- **Particionamento da Base de Dados:** Select: Mesmo tamanho temporal
+- **Núm. partições:** 3
 
 The dataset covers the period from **28/04/2012 to 29/11/2025**. The tool divided this period into three temporal partitions with approximately equal durations:
 
@@ -234,9 +227,13 @@ The dataset covers the period from **28/04/2012 to 29/11/2025**. The tool divide
 | P2 | 07/11/2016 | 19/05/2021 | 5,116 | 4 years, 6 months, 11 days |
 | P3 | 19/05/2021 | 29/11/2025 | 3,967 | 4 years, 6 months, 9 days |
 
-The minimum Support and minimum Confidence were both set to **1.00%**. The temporal analysis was then generated using the `first_pull → merged` meta-rule.
+Configure the analysis as follows:
 
-### Expected Temporal Results
+- **Suporte mínimo:** 1.00%
+- **Confiança mínima:** 1.00%
+- **Meta-regra:** `first_pull → merged` (Selected in the General Analysis)
+
+Run the temporal analysis. The following results are expected:
 
 | Partition | Support | Confidence | Lift |
 |---|---:|---:|---:|
