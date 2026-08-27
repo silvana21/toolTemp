@@ -197,22 +197,28 @@ Licença
 
 
 **Rule:** `first_pull=True → merged=False`
-Metric	  Expected Value
-Support	       0.22
-Confidence	   0.68
-Lift	       1.31
+
+| Metric	  |Expected Value |
+| --- | --- |
+| Support  |	       0.22   |
+| Confidence	|   0.68 |
+| Lift	    |   1.31 |
 
 **Rule:** `first_pull=False → merged=True`
-Metric	  Expected Value
-Support	       0.38
-Confidence	   0.56
-Lift	       1.15
+
+| Metric | 	  Expected Value |
+| --- | --- |
+| Support |	       0.38 |
+|Confidence	|   0.56 |
+|Lift |	       1.15 |
 
 **Rule:** `first_pull=True → merged=True`
-Metric	  Expected Value
-Support	       0.10
-Confidence	   0.32
-Lift	       0.67
+
+| Metric|	  Expected | Value |
+| --- | --- |
+| Support	|       0.10 |
+| Confidence |	   0.32 |
+| Lift	|       0.67 |
 
 ![General Analysis](./datasets/validation/general_analysis.png)
 
