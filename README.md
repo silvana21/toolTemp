@@ -189,13 +189,11 @@ Licença
 
 **Rule:** `first_pull=False → merged=False`
 
-Metric	  Expected Value
-
-Support	       0.30
-
-Confidence	   0.44
-
-Lift	       0.86
+| Metric	|  Expected Value |
+| --- | --- |
+| Support | 0.30 |
+| Confidence | 0.44 |
+| Lift | 0.86 |
 
 
 **Rule:** `first_pull=True → merged=False`
