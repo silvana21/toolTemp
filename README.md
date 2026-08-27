@@ -160,27 +160,43 @@ To use an example dataset:
 ## Technologies
 
 Python
+
 Streamlit
+
 Pandas
+
 MLxtend
+
 Plotly
+
 Matplotlib
+
 Licença
+
 
 
 ## Reproducible Validation Example
 **Dataset:** `datasets/django.csv`
+
 **Minimum Support:** 1.00%
+
 **Minimum Confidence:** 1.00%
+
 **Selected Meta Regra:** first_pull → merged
+
 
 ### Expected Results from the General Analysis
 
 **Rule:** `first_pull=False → merged=False`
+
 Metric	  Expected Value
+
 Support	       0.30
+
 Confidence	   0.44
+
 Lift	       0.86
+
 
 **Rule:** `first_pull=True → merged=False`
 Metric	  Expected Value
