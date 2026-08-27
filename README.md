@@ -216,7 +216,7 @@ Run the general analysis. The following results are expected:
 
 In the **Análise Temporal** tab:
 
-- **Particionamento da Base de Dados:** Select: Mesmo tamanho temporal
+- **Particionamento da Base de Dados:** Mesmo tamanho temporal
 - **Núm. partições:** 3
 
 The dataset covers the period from **28/04/2012 to 29/11/2025**. The tool divided this period into three temporal partitions with approximately equal durations:
@@ -231,9 +231,9 @@ Configure the analysis as follows:
 
 - **Suporte mínimo:** 1.00%
 - **Confiança mínima:** 1.00%
-- **Meta-regra:** `first_pull → merged` (Selected in the General Analysis)
+- **Meta-regra:** `first_pull → merged` (Selected in the general analysis)
 
-Run the temporal analysis. The following results are expected:
+Run the temporal analysis. The following results are expected for the **especific rule** `first_pull=True → merged=True`:
 
 | Partition | Support | Confidence | Lift |
 |---|---:|---:|---:|
