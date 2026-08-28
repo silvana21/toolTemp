@@ -76,7 +76,7 @@ No GPU is required.
 
 Clone the repository
 
-```git clone --branch v1.0.2 https://github.com/silvana21/toolTemp.git```
+```git clone --branch v1.0.3 https://github.com/silvana21/toolTemp.git```
 
 Enter the project
 
@@ -248,7 +248,7 @@ MIT License.
 
 This version of the artifact is archived on Zenodo:
 
-DOI: 10.5281/zenodo.22136702
+DOI: 10.5281/zenodo.22147640
 
 
 ## Author
