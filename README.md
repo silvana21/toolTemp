@@ -5,7 +5,9 @@ TEMAR is a web-based tool developed to support the temporal analysis of associat
 The tool applies the Apriori algorithm to discover association rules and allows users to analyze how rule quality measures evolve over time, including:
 
 Support
+
 Confidence
+
 Lift
 
 The system supports multiple temporal partitioning strategies, enabling researchers to investigate how association patterns change during software evolution.
@@ -13,17 +15,16 @@ The system supports multiple temporal partitioning strategies, enabling research
 
 ## Features
 
-Features
-Import CSV datasets
-Mine association rules using Apriori
-Configure minimum support and confidence
-Temporal partitioning
- Manual temporal milestones
- Equal-size intervals
- Equal-number-of-records partitions
-Compare rule evolution over time
-Interactive visualizations
-Plot Support, Confidence and Lift
+- Import CSV datasets
+- Mine association rules using Apriori
+- Configure minimum support and confidence
+- Temporal partitioning
+    - Manual temporal milestones
+    - Equal-size intervals
+    - Equal-number-of-records partitions
+- Compare rule evolution over time
+- Interactive visualizations
+- Plot Support, Confidence and Lift
 
 
 ## Repository Organization
@@ -36,7 +37,7 @@ Plot Support, Confidence and Lift
 
 ├── paper/                                   # Paper Accepted at SBES 2026
 
-├── analysis.py                              # Streamlit auxiliar functions
+├── analysis.py                              # Auxiliary Streamlit unctions
 
 ├── LICENSE
 
@@ -61,17 +62,7 @@ Tested on:
 
 - Windows 11
 
-Required libraries:
-
-- numpy==2.3.2
-- pandas
-- matplotlib
-- mlxtend
-- plotly
-- streamlit
-- streamlit-option-men
-- streamlit-sortables==0.3.1
-- python-dateutil
+Required libraries are listed in `requirements.txt`.
 
 Hardware requirements
 
@@ -128,32 +119,34 @@ Open the URL in a web browser.
 The tool expects CSV files containing categorical attributes.
 Continuous and temporal attributes must be discretized beforehand, when necessary, for inclusion in association rule mining.
 
+The example datasets included in this artifact are already preprocessed and can be directly loaded into the tool.
+
 
 ## Example Workflow
 
 - Run the application.
 - Load one of the sample CSV files.
 - Configure minimum support and confidence.
-- Choose the rules to analyze.
+- Choose the meta rules to analyze.
 - Run the mining process for the complete dataset.
-- Choose the partitioning strategy.
-- Configure minimum support and confidence to temporal analysis.
+- Select the temporal partitioning strategy.
+- Configure minimum support and confidence for the temporal analysis.
 - Run the mining process for the partitioned datasets.
-- View the charts.
+- View the resulting charts.
 
 
 ## Example Datasets
 
-The datasets/ directory contains example datasets extracted from open-source software repositories for demonstrating and testing the TemAR tool.
+The datasets/ directory contains example datasets extracted from open-source software repositories for demonstrating and testing the TEMAR tool.
 
-Each CSV file includes categorical data derived from pull requests, contributors, and code review outcomes. These datasets can be directly loaded through the TemAR interface to explore the tool's temporal association rule mining capabilities.
+Each CSV file includes categorical data derived from pull requests, contributors, and code review outcomes. These datasets can be directly loaded through the TEMAR interface to explore the tool's temporal association rule mining capabilities.
 
 To use an example dataset:
 
 - Launch the application.
-- Select Load Dataset.
+- Select the `Carregar CSV` tab.
 - Choose one of the CSV files available in the datasets/ directory.
-- Configure the mining parameters and chose the rules to analyze.
+- Configure the mining parameters and choose the meta rules to analyze.
 - Run the analysis and explore the temporal visualizations presented.
 
 
@@ -233,7 +226,7 @@ Configure the analysis as follows:
 - **Confiança mínima:** 1.00%
 - **Meta-regra:** `first_pull → merged` (Selected in the general analysis)
 
-Run the temporal analysis. The following results are expected for the **especific rule** `first_pull=True → merged=True`:
+Run the temporal analysis. The following results are expected for the **specific rule** `first_pull=True → merged=True`:
 
 | Partition | Support | Confidence | Lift |
 |---|---:|---:|---:|
