@@ -248,7 +248,7 @@ MIT License.
 
 This version of the artifact is archived on Zenodo:
 
-DOI: [will be updated after the new Zenodo version is published]
+DOI: 10.5281/zenodo.22136702
 
 
 ## Author
