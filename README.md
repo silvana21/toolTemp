@@ -76,7 +76,7 @@ No GPU is required.
 
 Clone the repository
 
-```git clone --branch v1.0.5 https://github.com/silvana21/toolTemp.git```
+```git clone --branch v1.0.4 https://github.com/silvana21/toolTemp.git```
 
 Enter the project
 
